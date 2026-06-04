@@ -153,15 +153,19 @@ class NormalizationTests(unittest.TestCase):
             area="示例区",
             max_rent=30000,
             min_rent=None,
-            layouts="两房,兩房,二房,2 bedroom,two-bedroom,开放式",
+            layouts="一房,两房,兩房,二房,三房,四房,2 bedroom,two-bedroom,开放式,studio",
             estates=None,
             sites="hkp",
         )
 
-        self.assertEqual(config.filters.layouts, ["2房", "开放式"])
+        self.assertEqual(config.filters.layouts, ["1房", "2房", "3房", "4房", "开放式"])
+        self.assertEqual(canonical_layout("一房"), "1房")
         self.assertEqual(canonical_layout("兩房一廳"), "2房")
+        self.assertEqual(canonical_layout("三房"), "3房")
+        self.assertEqual(canonical_layout("四房"), "4房")
         self.assertEqual(canonical_layout("2 bedroom"), "2房")
         self.assertEqual(canonical_layout("two-bedroom"), "2房")
+        self.assertEqual(canonical_layout("three bedrooms"), "3房")
         self.assertEqual(canonical_layout("两居室"), "2房")
         self.assertEqual(layout_bedroom_count("open-plan"), 0)
 

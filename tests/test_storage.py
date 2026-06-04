@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 from hk_rental_tracker.adapters import SiteScanResult
 from hk_rental_tracker.config import create_task_config, save_task_config
-from hk_rental_tracker.daily_report import _budget_stats, generate_daily_report, send_report
+from hk_rental_tracker.daily_report import _action_note, _budget_stats, _rent_percentile, _stale_value_rows, generate_daily_report, send_report
 from hk_rental_tracker.models import ListingObservation
 from hk_rental_tracker.scanner import scan_task
 from hk_rental_tracker.storage import RentalStore
@@ -530,6 +530,35 @@ class StorageTests(unittest.TestCase):
         self.assertNotEqual([row["rent_band"] for row in rows], ["<=15k", "15k-16k", "16k-18k", "18k-20k", ">20k"])
         self.assertEqual(sum(row["active_count"] for row in rows), 1)
         self.assertTrue(all("rent_lower" in row and "rent_upper" in row for row in rows))
+
+    def test_budget_friendly_signal_uses_dynamic_market_cutoff(self) -> None:
+        market_rows = [
+            {"rent_hkd": 33000},
+            {"rent_hkd": 62000},
+            {"rent_hkd": 88000},
+            {"rent_hkd": 146000},
+            {"rent_hkd": 238000},
+        ]
+        cutoff = _rent_percentile(market_rows, 0.35)
+
+        self.assertEqual(cutoff, 62000)
+        self.assertIn("预算友好", _action_note({"rent_hkd": 33000}, low_rent_cutoff=cutoff))
+        self.assertNotIn("预算友好", _action_note({"rent_hkd": 88000}, low_rent_cutoff=cutoff))
+
+    def test_stale_value_rows_use_dynamic_low_rent_cutoff(self) -> None:
+        rows = [
+            {
+                "rent_hkd": 33000,
+                "price_per_sqft": 80.0,
+                "layout": "2房",
+                "first_seen_at": "2026-05-01T00:00:00+08:00",
+            }
+        ]
+
+        stale_rows = _stale_value_rows(rows, "2026-06-01T00:00:00+08:00", low_rent_cutoff=62000)
+
+        self.assertEqual(len(stale_rows), 1)
+        self.assertIn("预算友好", stale_rows[0]["action_note"])
 
     def test_send_report_posts_webhook_json(self) -> None:
         class FakeResponse:

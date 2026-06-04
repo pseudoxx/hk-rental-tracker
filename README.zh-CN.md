@@ -152,7 +152,7 @@ python3 -m hk_rental_tracker query --task tasks/<slug> --active-only --limit 50
 - `filters.min_gross_area_sqft` / `filters.max_gross_area_sqft`：建筑面积上下限。本地强制过滤，确认支持的 API 将同步下推。
 - `filters.min_building_age_years` / `filters.max_building_age_years`：楼龄上下限。本地强制过滤，确认支持的 API 将同步下推。
 - `filters.min_price_per_sqft` / `filters.max_price_per_sqft`：实用尺租上下限。根据 API 回传的尺租或本地计算结果进行过滤。
-- `filters.layouts`：目标户型。系统会将“两房”、“二房”、“2 bedroom”等输入标准化为 `2房`，并同步用于 API 下推及本地过滤。
+- `filters.layouts`：目标户型。系统会将“一房”、“两房”、“三房”、“四房”、“二房”、“2 bedroom”、“three bedrooms”等输入标准化为 `1房`、`2房`、`3房`、`4房` 等格式，并同步用于 API 下推及本地过滤。
 - `filters.keywords`：必须包含的关键词，用于精确锁定屋苑、地址、设施或描述。
 - `filters.excluded_estates`：屋苑黑名单，符合此名单的房源将被排除。
 - `filters.excluded_keywords`：通用关键词黑名单，用于排除特定区域、地址或描述。

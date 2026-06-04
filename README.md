@@ -152,7 +152,7 @@ python3 -m hk_rental_tracker query --task tasks/<slug> --active-only --limit 50
 - `filters.min_gross_area_sqft` / `filters.max_gross_area_sqft`：建築面積上下限。本地強制過濾，確認支援之 API 將同步下推。
 - `filters.min_building_age_years` / `filters.max_building_age_years`：樓齡上下限。本地強制過濾，確認支援之 API 將同步下推。
 - `filters.min_price_per_sqft` / `filters.max_price_per_sqft`：實用呎租上下限。根據 API 回傳之呎租或本地計算結果進行過濾。
-- `filters.layouts`：目標戶型。系統會將「兩房」、「二房」、「2 bedroom」等輸入標準化為 `2房`，並同步用於 API 下推及本地過濾。
+- `filters.layouts`：目標戶型。系統會將「一房」、「兩房」、「三房」、「四房」、「二房」、「2 bedroom」、「three bedrooms」等輸入標準化為 `1房`、`2房`、`3房`、`4房` 等格式，並同步用於 API 下推及本地過濾。
 - `filters.keywords`：必須包含之關鍵詞，用於精確鎖定屋苑、地址、設施或描述。
 - `filters.excluded_estates`：屋苑黑名單，符合此名單之房源將被排除。
 - `filters.excluded_keywords`：通用關鍵詞黑名單，用於排除特定區域、地址或描述。

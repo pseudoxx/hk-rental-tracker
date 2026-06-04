@@ -24,6 +24,12 @@ from .storage import RentalStore
 
 OK_RUN_STATUSES = ("ok",)
 PRIVATE_ENV_PATHS = (Path.home() / ".codex" / "hk-rental-tracker.env",)
+VALUE_DISCOUNT_PCT = -5
+DEEP_VALUE_DISCOUNT_PCT = -10
+STALE_VALUE_DISCOUNT_PCT = -8
+LOW_RENT_PERCENTILE = 0.35
+STALE_MIN_AGE_DAYS = 14
+WITHDRAWAL_LOOKBACK_DAYS = 30
 
 
 @dataclass
@@ -79,15 +85,16 @@ def generate_daily_report(
         source_missing_rows = _source_missing_rows(conn, day_start, target_run.cutoff)
         removed_rows = [previous_by_id[id_] for id_ in sorted(set(previous_by_id) - set(current_by_id))]
         removed_rows = _with_age(removed_rows, target_run.cutoff)
+        budget_reference_rows = _rent_distribution_rows(conn)
+        low_rent_cutoff = _rent_percentile(budget_reference_rows or current_rows, LOW_RENT_PERCENTILE)
         rent_changes = _rent_changes(current_by_id, previous_by_id, target_run.cutoff)
         rent_decreases = [row for row in rent_changes if row.get("rent_delta_hkd") is not None and row["rent_delta_hkd"] < 0]
-        value_rows = _value_rows(current_rows, target_run.cutoff)
-        fresh_value_rows = _fresh_value_rows(new_rows, current_rows, target_run.cutoff)
-        budget_reference_rows = _rent_distribution_rows(conn)
+        value_rows = _value_rows(current_rows, target_run.cutoff, low_rent_cutoff=low_rent_cutoff)
+        fresh_value_rows = _fresh_value_rows(new_rows, current_rows, target_run.cutoff, low_rent_cutoff=low_rent_cutoff)
         budget_stats = _budget_stats(current_rows, previous_rows, new_rows, removed_rows, budget_reference_rows)
         withdrawal_rows = _withdrawal_signal_rows(conn, target_run.cutoff)
         withdrawal_lag_stats = _withdrawal_lag_stats(withdrawal_rows)
-        stale_value_rows = _stale_value_rows(current_rows, target_run.cutoff)
+        stale_value_rows = _stale_value_rows(current_rows, target_run.cutoff, low_rent_cutoff=low_rent_cutoff)
 
         layout_stats = _layout_stats(current_rows, previous_rows, week_rows)
         estate_stats = _estate_stats(current_rows, previous_rows)
@@ -501,7 +508,7 @@ def _rent_distribution_rows(conn: Connection) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
-def _value_rows(rows: list[dict[str, Any]], cutoff: str, limit: int = 25) -> list[dict[str, Any]]:
+def _value_rows(rows: list[dict[str, Any]], cutoff: str, limit: int = 25, low_rent_cutoff: int | None = None) -> list[dict[str, Any]]:
     stats = _stats_by_layout(rows)
     candidates = []
     for row in rows:
@@ -510,16 +517,22 @@ def _value_rows(rows: list[dict[str, Any]], cutoff: str, limit: int = 25) -> lis
         if row.get("price_per_sqft") is None or layout_avg_psf is None:
             continue
         discount = (float(row["price_per_sqft"]) - layout_avg_psf) / layout_avg_psf * 100
-        if discount <= -5 or row.get("active_source_count", 0) >= 2:
+        if discount <= VALUE_DISCOUNT_PCT or row.get("active_source_count", 0) >= 2:
             item = dict(row)
             item["psf_vs_layout_avg_pct"] = discount
             item["local_age_days"] = _age_days(item.get("first_seen_at"), cutoff)
-            item["action_note"] = _action_note(item)
+            item["action_note"] = _action_note(item, low_rent_cutoff=low_rent_cutoff)
             candidates.append(item)
     return sorted(candidates, key=lambda row: (row.get("price_per_sqft") or 9999, row.get("rent_hkd") or 999999))[:limit]
 
 
-def _fresh_value_rows(new_rows: list[dict[str, Any]], current_rows: list[dict[str, Any]], cutoff: str, limit: int = 25) -> list[dict[str, Any]]:
+def _fresh_value_rows(
+    new_rows: list[dict[str, Any]],
+    current_rows: list[dict[str, Any]],
+    cutoff: str,
+    limit: int = 25,
+    low_rent_cutoff: int | None = None,
+) -> list[dict[str, Any]]:
     stats = _stats_by_layout(current_rows)
     candidates = []
     for row in new_rows:
@@ -531,7 +544,7 @@ def _fresh_value_rows(new_rows: list[dict[str, Any]], current_rows: list[dict[st
         else:
             item["psf_vs_layout_avg_pct"] = None
         item["local_age_days"] = _age_days(item.get("first_seen_at"), cutoff)
-        item["action_note"] = _action_note(item, fresh=True)
+        item["action_note"] = _action_note(item, fresh=True, low_rent_cutoff=low_rent_cutoff)
         candidates.append(item)
     return sorted(candidates, key=lambda row: (row.get("price_per_sqft") or 9999, row.get("rent_hkd") or 999999))[:limit]
 
@@ -606,6 +619,14 @@ def _dynamic_rent_bands(rows: list[dict[str, Any]], target_count: int = 5) -> li
     return bands
 
 
+def _rent_percentile(rows: list[dict[str, Any]], percentile: float) -> int | None:
+    rents = sorted(int(row["rent_hkd"]) for row in rows if row.get("rent_hkd") is not None)
+    if not rents:
+        return None
+    position = min(len(rents) - 1, max(0, math.ceil(len(rents) * percentile) - 1))
+    return rents[position]
+
+
 def _nice_rent_step(value: float) -> int:
     if value <= 0:
         return 1000
@@ -640,7 +661,7 @@ def _with_age(rows: list[dict[str, Any]], cutoff: str) -> list[dict[str, Any]]:
     return result
 
 
-def _withdrawal_signal_rows(conn: Connection, cutoff: str, days: int = 30, limit: int = 100) -> list[dict[str, Any]]:
+def _withdrawal_signal_rows(conn: Connection, cutoff: str, days: int = WITHDRAWAL_LOOKBACK_DAYS, limit: int = 100) -> list[dict[str, Any]]:
     cutoff_dt = datetime.fromisoformat(cutoff)
     start = (cutoff_dt - timedelta(days=days)).isoformat()
     rows = conn.execute(
@@ -706,7 +727,13 @@ def _withdrawal_lag_stats(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return stats
 
 
-def _stale_value_rows(rows: list[dict[str, Any]], cutoff: str, min_age_days: int = 14, limit: int = 25) -> list[dict[str, Any]]:
+def _stale_value_rows(
+    rows: list[dict[str, Any]],
+    cutoff: str,
+    min_age_days: int = STALE_MIN_AGE_DAYS,
+    limit: int = 25,
+    low_rent_cutoff: int | None = None,
+) -> list[dict[str, Any]]:
     stats = _stats_by_layout(rows)
     candidates = []
     for row in rows:
@@ -721,8 +748,9 @@ def _stale_value_rows(rows: list[dict[str, Any]], cutoff: str, min_age_days: int
         else:
             item["psf_vs_layout_avg_pct"] = None
         discount = item.get("psf_vs_layout_avg_pct")
-        if (discount is not None and discount <= -8) or (item.get("rent_hkd") is not None and item["rent_hkd"] <= 16000):
-            base_note = _action_note(item)
+        is_low_rent = low_rent_cutoff is not None and item.get("rent_hkd") is not None and item["rent_hkd"] <= low_rent_cutoff
+        if (discount is not None and discount <= STALE_VALUE_DISCOUNT_PCT) or is_low_rent:
+            base_note = _action_note(item, low_rent_cutoff=low_rent_cutoff)
             item["action_note"] = "先确认仍可约看" if base_note == "-" else base_note + "、先确认仍可约看"
             candidates.append(item)
     return sorted(candidates, key=lambda row: (-(row.get("local_age_days") or 0), row.get("price_per_sqft") or 9999))[:limit]
@@ -907,7 +935,8 @@ def _render_report(
             "- 完整消失租盘指昨日基准仍有任一来源活跃、今日基准所有来源都不再活跃。",
             "- 来源消失记录是更细粒度的代理网站记录消失；它不等同于成交。",
             "- 今日租盘降价按今日基准租金低于昨日基准租金计算，并显示本地首次见到以来的盘龄。",
-            "- 撤盘滞后统计按本地首次见到到来源首次消失之间的时间分桶；它衡量网页撤盘节奏，不代表真实成交日。",
+            f"- 预算段和“预算友好”信号按本地数据库租金分布动态计算；预算友好约取租金最低 {LOW_RENT_PERCENTILE:.0%} 的盘。",
+            f"- 撤盘滞后统计观察最近 {WITHDRAWAL_LOOKBACK_DAYS} 天来源消失记录，并按本地首次见到到来源首次消失之间的时间分桶；它衡量网页撤盘节奏，不代表真实成交日。",
             "- `first_delisted_at` / `first_missing_at` 只代表本地首次观察到消失。",
             "- 昨日和上周比较使用对应日期最后一次成功扫描；如果当天没有成功扫描，会显示为无基准。",
             "",
@@ -1017,7 +1046,7 @@ def _append_renter_signals_section(
         )
 
     lines.extend(["", "撤盘滞后/消化信号：", ""])
-    lines.append("成交盘可能不会马上从中介网站撤下；这里看最近 30 天来源消失记录按本地盘龄分布。")
+    lines.append(f"成交盘可能不会马上从中介网站撤下；这里看最近 {WITHDRAWAL_LOOKBACK_DAYS} 天来源消失记录按本地盘龄分布。")
     lines.append("")
     if withdrawal_lag_stats:
         lines.append("| 撤盘盘龄 | 来源消失记录 | 占比 | 平均租金 | 平均尺租 |")
@@ -1028,7 +1057,7 @@ def _append_renter_signals_section(
                 f"{_fmt_money_float(row.get('avg_rent'))} | {_fmt_psf(row.get('avg_psf'))} |"
             )
     else:
-        lines.append("暂无最近 30 天来源消失记录。")
+        lines.append(f"暂无最近 {WITHDRAWAL_LOOKBACK_DAYS} 天来源消失记录。")
 
     if withdrawal_rows:
         lines.extend(["", "最近来源消失样本：", ""])
@@ -1044,7 +1073,7 @@ def _append_renter_signals_section(
 
     lines.extend(["", "低价旧盘复核清单：", ""])
     if not stale_value_rows:
-        lines.append("暂无挂盘 14 天以上且仍显著低价的活跃盘。")
+        lines.append(f"暂无挂盘 {STALE_MIN_AGE_DAYS} 天以上且仍显著低价的活跃盘。")
         return
     lines.append("这类盘可能是真便宜，也可能是已租未撤或引流；联系时先问是否仍可约看、是否同一座/层/室。")
     lines.append("")
@@ -1424,17 +1453,17 @@ def _fmt_age(value: int | float | None) -> str:
     return f"{value:.1f}天"
 
 
-def _action_note(row: dict[str, Any], fresh: bool = False) -> str:
+def _action_note(row: dict[str, Any], fresh: bool = False, low_rent_cutoff: int | None = None) -> str:
     parts = []
     if fresh:
         parts.append("新增")
     discount = row.get("psf_vs_layout_avg_pct")
-    if discount is not None and discount <= -10:
+    if discount is not None and discount <= DEEP_VALUE_DISCOUNT_PCT:
         parts.append(f"尺租低同户型均值 {abs(discount):.0f}%")
-    elif discount is not None and discount <= -5:
+    elif discount is not None and discount <= VALUE_DISCOUNT_PCT:
         parts.append(f"尺租低同户型均值 {abs(discount):.0f}%")
     rent = row.get("rent_hkd")
-    if rent is not None and rent <= 16000:
+    if low_rent_cutoff is not None and rent is not None and rent <= low_rent_cutoff:
         parts.append("预算友好")
     if row.get("active_source_count", 0) >= 2:
         parts.append("跨来源确认")
