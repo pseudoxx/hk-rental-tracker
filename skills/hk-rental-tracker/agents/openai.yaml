@@ -1,0 +1,6 @@
+interface:
+  display_name: "HK Rental Tracker"
+  short_description: "Track Hong Kong rental listings locally"
+  default_prompt: "Use $hk-rental-tracker when the user wants to create, start, initialize, scan, or track a Hong Kong rental market. Ask for the target area or estate, layout, and budget if missing."
+policy:
+  allow_implicit_invocation: true

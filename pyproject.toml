@@ -1,0 +1,17 @@
+[project]
+name = "hk-rental-tracker"
+version = "0.1.0"
+description = "Local Hong Kong rental listing tracker and market analyzer"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+browser = ["playwright>=1.44"]
+dev = ["pytest>=8", "PyYAML>=6"]
+
+[tool.setuptools.packages.find]
+include = ["hk_rental_tracker*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

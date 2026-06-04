@@ -1,0 +1,17 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.cache/
+.venv/
+venv/
+*.local.md
+.agents/
+.claude/settings.local.json
+*.egg-info/
+*.db
+*.db-shm
+*.db-wal
+tasks/*
+!tasks/.gitkeep
