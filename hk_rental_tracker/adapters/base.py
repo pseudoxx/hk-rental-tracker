@@ -64,17 +64,25 @@ class GenericSiteAdapter:
             result.errors.append("No search URLs configured and no candidate URLs available.")
             return result
         seen_source_keys = set()
-        for url in urls:
+        for index, url in enumerate(urls, start=1):
+            _emit_progress(fetcher, f"{self.site} html page {index}/{len(urls)} start")
             fetch = fetcher.fetch(url)
             result.fetched_urls.append(url)
             if not fetch.ok:
                 result.errors.append(f"{url}: {fetch.error or fetch.status_code}")
+                _emit_progress(fetcher, f"{self.site} html page {index}/{len(urls)} failed")
                 continue
+            before = len(result.observations)
             for observation in observations_from_html(self.site, fetch.url, fetch.html, config.area_terms):
                 if observation.source_key in seen_source_keys:
                     continue
                 seen_source_keys.add(observation.source_key)
                 result.observations.append(observation)
+            _emit_progress(
+                fetcher,
+                f"{self.site} html page {index}/{len(urls)} done: "
+                f"new_observations={len(result.observations) - before}",
+            )
         if result.errors and not result.observations:
             result.ok = False
         return result
@@ -85,6 +93,7 @@ class GenericSiteAdapter:
         base_url = "https://data.midland.com.hk/search/v2/properties" if brand == "midland" else "https://data.hkp.com.hk/search/v2/properties"
         params = _common_property_params(config, lang="zh-hk", site=self.site)
         params["text"] = config.area
+        _emit_progress(fetcher, f"{self.site} token page start")
         token_fetch = _fetch_page_with_retries(fetcher, landing_url)
         result.fetched_urls.append(landing_url)
         token = None
@@ -92,23 +101,28 @@ class GenericSiteAdapter:
             token = _extract_next_token(token_fetch.html, brand)
             if token and brand == "midland":
                 _save_midland_build_token(token)
+            _emit_progress(fetcher, f"{self.site} token page done: token={'yes' if token else 'no'}")
         elif brand != "midland":
             result.ok = False
             result.errors.append(f"{landing_url}: {token_fetch.error or token_fetch.status_code}")
+            _emit_progress(fetcher, f"{self.site} token page failed")
             return result
 
         if not token and brand == "midland":
             token = _load_midland_build_token()
             if token:
                 result.fetched_urls.append(f"{landing_url}: using cached build token")
+                _emit_progress(fetcher, f"{self.site} using cached build token")
 
         if not token and brand == "midland":
             if not token_fetch.ok:
                 result.errors.append(f"{landing_url}: {token_fetch.error or token_fetch.status_code}")
+            _emit_progress(fetcher, f"{self.site} browser fallback start")
             return _scan_midland_with_browser_fallback(config, result, landing_url, base_url, params, fetcher.timeout)
         if not token:
             result.ok = False
             result.errors.append(f"{landing_url}: unable to extract API token")
+            _emit_progress(fetcher, f"{self.site} token extraction failed")
             return result
 
         headers = {
@@ -124,6 +138,7 @@ class GenericSiteAdapter:
         if not pages and brand == "midland":
             if not token_fetch.ok:
                 result.errors.insert(0, f"{landing_url}: {token_fetch.error or token_fetch.status_code}")
+            _emit_progress(fetcher, f"{self.site} browser fallback start")
             return _scan_midland_with_browser_fallback(config, result, landing_url, base_url, params, fetcher.timeout)
         for page in pages:
             for item in page.get("result") or []:
@@ -143,15 +158,18 @@ class GenericSiteAdapter:
             result.ok = False
             result.errors.append("No search URLs configured and no candidate URLs available.")
             return result
-        for base_url in urls:
+        for url_index, base_url in enumerate(urls, start=1):
+            _emit_progress(fetcher, f"{self.site} base url {url_index}/{len(urls)} start")
             page_no = 1
             total_pages = 1
             while page_no <= total_pages:
                 url = _ricacorp_page_url(base_url, page_no)
+                _emit_progress(fetcher, f"{self.site} page {page_no}/{total_pages} start")
                 fetch = _fetch_page_with_retries(fetcher, url)
                 result.fetched_urls.append(url)
                 if not fetch.ok:
                     result.errors.append(f"{url}: {fetch.error or fetch.status_code}")
+                    _emit_progress(fetcher, f"{self.site} page {page_no}/{total_pages} failed")
                     if page_no == 1:
                         break
                     page_no += 1
@@ -160,6 +178,7 @@ class GenericSiteAdapter:
                 posts = state.get("POSTS") or []
                 if not isinstance(posts, list):
                     result.errors.append(f"{url}: Ricacorp page state did not contain a POSTS list")
+                    _emit_progress(fetcher, f"{self.site} page {page_no}/{total_pages} parse failed")
                     if page_no == 1:
                         break
                     page_no += 1
@@ -167,11 +186,14 @@ class GenericSiteAdapter:
                 total_pages = max(1, int(state.get("POSTSNUMPAGES") or 1))
                 if page_no == 1 and not posts:
                     result.errors.append(f"{url}: Ricacorp page state contained zero posts")
+                    _emit_progress(fetcher, f"{self.site} page {page_no}/{total_pages} returned zero posts")
                     break
                 if page_no > 1 and not posts:
                     result.errors.append(f"{url}: Ricacorp page state contained zero posts")
+                    _emit_progress(fetcher, f"{self.site} page {page_no}/{total_pages} returned zero posts")
                     page_no += 1
                     continue
+                before = len(result.observations)
                 for item in posts:
                     if not isinstance(item, dict):
                         continue
@@ -183,6 +205,11 @@ class GenericSiteAdapter:
                         if source_id:
                             seen_source_ids.add(source_id)
                         result.observations.append(obs)
+                _emit_progress(
+                    fetcher,
+                    f"{self.site} page {page_no}/{total_pages} done: "
+                    f"new_observations={len(result.observations) - before}",
+                )
                 page_no += 1
         if result.errors and not result.observations:
             result.ok = False
@@ -216,22 +243,31 @@ class GenericSiteAdapter:
             page_payload = dict(payload)
             page_payload["offset"] = offset
             result.fetched_urls.append(f"{url} offset={offset}")
+            _emit_progress(fetcher, f"{self.site} api offset {offset} start")
             data, error = _post_json_with_retries(
                 url,
                 payload=page_payload,
                 headers=headers,
                 delay=fetcher.delay_seconds,
                 timeout=fetcher.timeout,
+                progress=getattr(fetcher, "emit_progress", None),
             )
             if data is None:
                 result.errors.append(f"{url}: {error or f'unable to fetch or parse JSON at offset {offset}'}")
+                _emit_progress(fetcher, f"{self.site} api offset {offset} failed")
                 break
             total = int(data.get("count") or 0)
             rows = data.get("data") or []
+            before = len(result.observations)
             for item in rows:
                 obs = _observation_from_centanet_item(item, fetched_at)
                 if obs:
                     result.observations.append(obs)
+            _emit_progress(
+                fetcher,
+                f"{self.site} api offset {offset} done: "
+                f"rows={len(rows)}, total={total}, new_observations={len(result.observations) - before}",
+            )
             if not rows:
                 break
             offset += int(payload["size"])
@@ -259,6 +295,12 @@ def _extract_next_token(html_text: str, brand: str) -> str | None:
     if brand == "midland":
         return (payload.get("runtimeConfig") or {}).get("BUILD_TOKEN")
     return ((payload.get("props") or {}).get("pageProps") or {}).get("userToken")
+
+
+def _emit_progress(fetcher: object, message: str) -> None:
+    emitter = getattr(fetcher, "emit_progress", None)
+    if callable(emitter):
+        emitter(message)
 
 
 def _midland_build_token_cache_path() -> Path:
@@ -294,7 +336,9 @@ def _fetch_page_with_retries(fetcher: PageFetcher, url: str, attempts: int = 3):
     result = None
     for attempt in range(max(1, attempts)):
         if attempt:
+            _emit_progress(fetcher, f"fetch retry wait: attempt={attempt + 1}/{attempts}, delay={attempt * 2:.1f}s")
             time.sleep(float(attempt * 2))
+        _emit_progress(fetcher, f"fetch attempt: {attempt + 1}/{attempts}")
         result = fetcher.fetch(url)
         if result.ok:
             return result
@@ -429,13 +473,26 @@ def _api_pages(
         page_params["page"] = str(page_no)
         url = f"{base_url}?{urllib.parse.urlencode(page_params)}"
         result.fetched_urls.append(url)
-        data, error = _fetch_json_with_retries(url, headers=headers, delay=fetcher.delay_seconds, timeout=fetcher.timeout)
+        _emit_progress(fetcher, f"{result.site} api page {page_no}/{total_pages} start")
+        data, error = _fetch_json_with_retries(
+            url,
+            headers=headers,
+            delay=fetcher.delay_seconds,
+            timeout=fetcher.timeout,
+            progress=getattr(fetcher, "emit_progress", None),
+        )
         if data is None:
             result.errors.append(f"{url}: {error or 'unable to fetch or parse JSON'}")
+            _emit_progress(fetcher, f"{result.site} api page {page_no}/{total_pages} failed")
             break
         count = int(data.get("count") or len(data.get("result") or []))
         total_pages = max(1, math.ceil(count / limit))
         pages.append(data)
+        _emit_progress(
+            fetcher,
+            f"{result.site} api page {page_no}/{total_pages} done: "
+            f"rows={len(data.get('result') or [])}, total={count}",
+        )
         page_no += 1
     return pages
 
@@ -578,14 +635,21 @@ def _fetch_json_with_retries(
     delay: float,
     timeout: int,
     attempts: int = 3,
+    progress=None,
 ) -> tuple[dict | None, str | None]:
     last_error: str | None = None
     for attempt in range(max(1, attempts)):
         retry_delay = delay if attempt == 0 else float(attempt * 2)
+        if progress:
+            progress(f"json get attempt {attempt + 1}/{attempts} start: {url}")
         data, error = _fetch_json(url, headers=headers, delay=retry_delay, timeout=timeout)
         if data is not None:
+            if progress:
+                progress(f"json get attempt {attempt + 1}/{attempts} ok")
             return data, None
         last_error = error
+        if progress:
+            progress(f"json get attempt {attempt + 1}/{attempts} failed: {error}")
         if error and error.startswith("HTTP 4") and "HTTP 429" not in error and not _looks_like_temporary_block(error):
             break
     return None, last_error
@@ -632,10 +696,13 @@ def _post_json_with_retries(
     delay: float,
     timeout: int,
     attempts: int = 3,
+    progress=None,
 ) -> tuple[dict | None, str | None]:
     last_error: str | None = None
     for attempt in range(max(1, attempts)):
         retry_delay = delay if attempt == 0 else float(attempt * 2)
+        if progress:
+            progress(f"json post attempt {attempt + 1}/{attempts} start: {url}")
         data, error = _post_json(
             url,
             payload=payload,
@@ -644,8 +711,12 @@ def _post_json_with_retries(
             timeout=timeout,
         )
         if data is not None:
+            if progress:
+                progress(f"json post attempt {attempt + 1}/{attempts} ok")
             return data, None
         last_error = error
+        if progress:
+            progress(f"json post attempt {attempt + 1}/{attempts} failed: {error}")
         if error and error.startswith("HTTP 4") and "HTTP 429" not in error and not _looks_like_temporary_block(error):
             break
     return None, last_error

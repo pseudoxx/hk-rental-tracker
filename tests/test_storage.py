@@ -338,6 +338,38 @@ class StorageTests(unittest.TestCase):
             self.assertEqual(rows[0]["last_rent_hkd"], 19500)
             store.close()
 
+    def test_scan_task_reports_progress(self) -> None:
+        html = """
+        <a href="/findproperty/zh-cn/detail/foo_ABC123?theme=rent">
+          中原地产 bookmark 示例居 2期 示例居 II 1座 高层 G室 1房 示例区
+          实用 实 380 呎 380呎 @ $61 /呎 租 $ 19,500
+        </a>
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            task_dir = Path(tmp) / "tasks" / "demo-market"
+            config = create_task_config(
+                slug="demo-market",
+                area="示例区",
+                max_rent=20000,
+                min_rent=None,
+                layouts="1房",
+                estates=None,
+                sites="centanet",
+            )
+            config.source_search_urls = {"centanet": ["data:text/html;charset=utf-8," + quote(html)]}
+            config.scan_options["request_delay_seconds"] = 0
+            save_task_config(task_dir, config)
+            messages: list[str] = []
+
+            report = scan_task(task_dir, mode="initial", progress=messages.append)
+
+            self.assertTrue(report.ok)
+            self.assertTrue(any("scan started" in message for message in messages))
+            self.assertTrue(any("site 1/1 adapter scan start: centanet" in message for message in messages))
+            self.assertTrue(any("fetch start:" in message for message in messages))
+            self.assertTrue(any("local filter done" in message for message in messages))
+            self.assertTrue(any("scan finished" in message for message in messages))
+
     def test_scan_task_excludes_estate_blacklist(self) -> None:
         html = """
         <a href="/findproperty/zh-cn/detail/runway_ABC123?theme=rent">

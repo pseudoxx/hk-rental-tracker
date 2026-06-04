@@ -55,6 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--mode", default="daily", choices=["initial", "daily", "manual"])
     scan.add_argument("--render", action="store_true", help="用浏览器渲染 JavaScript 页面")
     scan.add_argument("--sites", help="只扫描部分来源，例如 centanet,hkp")
+    scan.add_argument("--no-progress", action="store_true", help="不打印实时扫描进度")
 
     summarize = sub.add_parser("summarize", help="重新生成并显示摘要")
     summarize.add_argument("--task", required=True)
@@ -181,11 +182,13 @@ def command_add_url(args: argparse.Namespace) -> int:
 
 
 def command_scan(args: argparse.Namespace) -> int:
+    progress = None if args.no_progress else lambda message: print(f"[scan-progress] {message}", flush=True)
     report = scan_task(
         args.task,
         mode=args.mode,
         render_javascript=args.render or None,
         sites=split_terms(args.sites) if args.sites else None,
+        progress=progress,
     )
     print(f"扫描完成：run #{report.run_id}")
     print(f"记录到的来源观察：{report.inserted_observations}")

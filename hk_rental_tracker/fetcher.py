@@ -6,6 +6,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 import os
+from typing import Callable
 
 
 USER_AGENT = (
@@ -24,17 +25,37 @@ class FetchResult:
 
 
 class PageFetcher:
-    def __init__(self, render_javascript: bool = False, delay_seconds: float = 1.0, timeout: int = 30):
+    def __init__(
+        self,
+        render_javascript: bool = False,
+        delay_seconds: float = 1.0,
+        timeout: int = 30,
+        progress: Callable[[str], None] | None = None,
+    ):
         self.render_javascript = render_javascript
         self.delay_seconds = delay_seconds
         self.timeout = timeout
+        self.progress = progress
+
+    def emit_progress(self, message: str) -> None:
+        if self.progress:
+            self.progress(message)
 
     def fetch(self, url: str) -> FetchResult:
+        self.emit_progress(f"fetch start: {url}")
         if self.delay_seconds:
+            self.emit_progress(f"fetch wait: {self.delay_seconds:.1f}s before request")
             time.sleep(self.delay_seconds)
         if self.render_javascript:
-            return self._fetch_with_playwright(url)
-        return self._fetch_static(url)
+            result = self._fetch_with_playwright(url)
+        else:
+            result = self._fetch_static(url)
+        if result.ok:
+            status = result.status_code if result.status_code is not None else "-"
+            self.emit_progress(f"fetch ok: status={status}, chars={len(result.html)}")
+        else:
+            self.emit_progress(f"fetch failed: {result.error or result.status_code}")
+        return result
 
     def _fetch_static(self, url: str) -> FetchResult:
         request = urllib.request.Request(

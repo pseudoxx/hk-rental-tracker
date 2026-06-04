@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import socket
 import urllib.parse
+from typing import Callable
 
 from .adapters import GenericSiteAdapter, SiteScanResult
 from .config import load_task_config
@@ -60,8 +61,14 @@ def scan_task(
     mode: str = "daily",
     render_javascript: bool | None = None,
     sites: list[str] | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> ScanReport:
+    def emit(message: str) -> None:
+        if progress:
+            progress(message)
+
     task_path = Path(task_dir)
+    emit(f"loading task config: {task_path}")
     config = load_task_config(task_path)
     options = config.scan_options
     render = bool(options.get("render_javascript", False) if render_javascript is None else render_javascript)
@@ -72,25 +79,37 @@ def scan_task(
     store = RentalStore(task_path / "rental.db")
     run_id = store.start_run(mode=mode, task_slug=config.slug, filters=config.filters.to_dict())
     report = ScanReport(task_dir=task_path, run_id=run_id, mode=mode)
-    fetcher = PageFetcher(render_javascript=render, delay_seconds=delay)
+    fetcher = PageFetcher(render_javascript=render, delay_seconds=delay, progress=progress)
 
     try:
         selected_sites = sites or config.sites
+        emit(f"scan started: run #{run_id}, mode={mode}, sites={', '.join(selected_sites) or '-'}")
         if preflight:
+            emit("network preflight start")
             ok, notes = _preflight_network(selected_sites, config.source_search_urls)
             if not ok:
+                emit(f"network preflight blocked: {notes}")
                 report.errors.append(notes)
+                emit("writing blocked-run snapshot")
                 write_snapshot(task_path, report)
+                emit("exporting current local data after blocked preflight")
                 export_task(task_path, store)
                 store.finish_run(run_id, status="blocked", notes=notes)
+                emit(f"scan finished: run #{run_id}, status=blocked")
                 return report
-        for site in selected_sites:
+            emit("network preflight ok")
+        else:
+            emit("network preflight skipped")
+        total_sites = len(selected_sites)
+        for index, site in enumerate(selected_sites, start=1):
+            emit(f"site {index}/{total_sites} start: {site}")
             if not config.site_is_authorized(site):
                 site_result = SiteScanResult(
                     site=site,
                     ok=False,
                     errors=["source is disabled by task source policy"],
                 )
+                emit(f"site {index}/{total_sites} skipped: {site} is disabled by task source policy")
                 report.site_results.append(site_result)
                 report.errors.extend(f"{site}: {err}" for err in site_result.errors)
                 report.site_validation.append(
@@ -102,7 +121,13 @@ def scan_task(
                 )
                 continue
             adapter = GenericSiteAdapter(site)
+            emit(f"site {index}/{total_sites} adapter scan start: {site}")
             site_result = adapter.scan(config, fetcher)
+            emit(
+                f"site {index}/{total_sites} adapter scan done: {site}, "
+                f"ok={site_result.ok}, fetched_urls={len(site_result.fetched_urls)}, "
+                f"raw_observations={len(site_result.observations)}, errors={len(site_result.errors)}"
+            )
             report.site_results.append(site_result)
             if not site_result.ok:
                 report.errors.extend(f"{site}: {err}" for err in site_result.errors)
@@ -114,21 +139,41 @@ def scan_task(
                         errors=list(site_result.errors),
                     )
                 )
+                emit(f"site {index}/{total_sites} failed before local filtering: {site}")
                 continue
             if site_result.errors:
                 report.errors.extend(f"{site}: {err}" for err in site_result.errors)
+                emit(f"site {index}/{total_sites} has partial errors: {site}, errors={len(site_result.errors)}")
+            emit(f"site {index}/{total_sites} local filter start: {site}")
             filtered = filter_observations(site_result.observations, config.area_terms, config.filters)
+            emit(
+                f"site {index}/{total_sites} local filter done: {site}, "
+                f"kept={len(filtered)}, rejected={max(0, len(site_result.observations) - len(filtered))}"
+            )
             seen_source_keys = set()
-            for observation in filtered:
+            for observation_index, observation in enumerate(filtered, start=1):
                 store.upsert_observation(observation, run_id)
                 seen_source_keys.add(observation.source_key)
                 report.inserted_observations += 1
+                if observation_index == 1 or observation_index == len(filtered) or observation_index % 25 == 0:
+                    emit(
+                        f"site {index}/{total_sites} database upsert progress: {site}, "
+                        f"{observation_index}/{len(filtered)}"
+                    )
             should_mark_missing = mode != "initial" and not site_result.errors and (bool(filtered) or not safe_missing)
+            emit(
+                f"site {index}/{total_sites} missing-state update start: {site}, "
+                f"enabled={should_mark_missing}"
+            )
             missing_marked = store.mark_missing_sources(
                 site,
                 seen_source_keys,
                 run_id,
                 enabled=should_mark_missing,
+            )
+            emit(
+                f"site {index}/{total_sites} missing-state update done: {site}, "
+                f"marked={missing_marked}"
             )
             report.missing_sources_marked += missing_marked
             report.site_validation.append(
@@ -143,7 +188,10 @@ def scan_task(
                     errors=list(site_result.errors),
                 )
             )
+            emit(f"site {index}/{total_sites} done: {site}")
+        emit("writing scan snapshot")
         write_snapshot(task_path, report)
+        emit("exporting routine reports")
         export_task(task_path, store)
         status = "ok" if not report.errors else "partial"
         notes = json.dumps(
@@ -155,9 +203,11 @@ def scan_task(
             ensure_ascii=False,
         )
         store.finish_run(run_id, status=status, notes=notes)
+        emit(f"scan finished: run #{run_id}, status={status}")
     except Exception as exc:  # noqa: BLE001 - CLI should persist failure details
         report.errors.append(str(exc))
         store.finish_run(run_id, status="failed", notes=str(exc))
+        emit(f"scan failed: run #{run_id}, error={exc}")
         raise
     finally:
         store.close()
