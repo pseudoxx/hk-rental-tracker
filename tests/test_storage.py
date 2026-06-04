@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import os
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -7,7 +8,7 @@ from urllib.parse import quote
 
 from hk_rental_tracker.adapters import SiteScanResult
 from hk_rental_tracker.config import create_task_config, save_task_config
-from hk_rental_tracker.daily_report import generate_daily_report
+from hk_rental_tracker.daily_report import generate_daily_report, send_report
 from hk_rental_tracker.models import ListingObservation
 from hk_rental_tracker.scanner import scan_task
 from hk_rental_tracker.storage import RentalStore
@@ -512,6 +513,48 @@ class StorageTests(unittest.TestCase):
             self.assertTrue(result.csv_paths["new_listings"].exists())
             self.assertTrue(result.csv_paths["rent_changes"].exists())
             self.assertTrue(result.csv_paths["rent_decreases"].exists())
+
+    def test_send_report_posts_webhook_json(self) -> None:
+        class FakeResponse:
+            status = 204
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self) -> bytes:
+                return b""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            markdown_path = Path(tmp) / "daily_report_2026-05-19.md"
+            markdown_path.write_text("# 示例区租盘日终报告\n", encoding="utf-8")
+            requests = []
+
+            def fake_urlopen(request, timeout=0):
+                requests.append((request, timeout))
+                return FakeResponse()
+
+            env = {
+                "HK_RENTAL_TRACKER_WEBHOOK_URL": "https://example.com/hook",
+                "HK_RENTAL_TRACKER_WEBHOOK_FORMAT": "json",
+                "HK_RENTAL_TRACKER_WEBHOOK_TOKEN": "secret-token",
+            }
+            with patch.dict(os.environ, env, clear=False), patch("hk_rental_tracker.daily_report.urllib.request.urlopen", fake_urlopen):
+                sent = send_report(markdown_path, ["webhook"])
+
+            self.assertEqual(sent, ["webhook"])
+            self.assertEqual(len(requests), 1)
+            request, timeout = requests[0]
+            self.assertEqual(timeout, 30)
+            self.assertEqual(request.full_url, "https://example.com/hook")
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request.get_header("Authorization"), "Bearer secret-token")
+            payload = json.loads(request.data.decode("utf-8"))
+            self.assertEqual(payload["title"], "daily report 2026-05-19")
+            self.assertEqual(payload["filename"], markdown_path.name)
+            self.assertIn("示例区租盘日终报告", payload["text"])
 
 
 if __name__ == "__main__":

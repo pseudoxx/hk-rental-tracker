@@ -23,8 +23,10 @@ When the user asks to create, start, initialize, configure, scan, or track a mar
 1. Check whether `tasks/` already contains tracked markets and summarize the available choices if any exist.
 2. If no target market is clear, ask for the minimum required setup details: area or estate, layout, and any hard budget limit.
 3. Create the task with conservative defaults and default sources (`midland`, `centanet`, `hkp`, `ricacorp`) once the minimum details are known.
-4. Run the initial scan only after the task exists and the user has provided enough scope to avoid an accidental broad scrape.
-5. Summarize the scan output, source errors, generated snapshot, and export paths. Do not run browser verification unless explicitly requested.
+4. Before running the initial scan, ask whether the user wants routine automation for daily scans, daily report generation, and report delivery. Keep this as a short yes/no decision so the initial scan is not blocked unnecessarily.
+5. If the user wants automation, collect the daily run time/timezone, whether reports should be generated only after the final scan of the day, and desired delivery channels (`local`, `telegram`, `email`, `webhook`, or a comma-separated combination). Use environment variables or the private local env file for credentials; never write tokens, SMTP passwords, webhook URLs, or other secrets into task files or committed docs.
+6. Run the initial scan only after the task exists and the user has provided enough scope to avoid an accidental broad scrape.
+7. Summarize the scan output, source errors, generated snapshot, export paths, and any selected automation/report delivery setup. Do not run browser verification unless explicitly requested.
 
 ## Commands
 
@@ -64,6 +66,18 @@ Add a verified source page:
 python3 -m hk_rental_tracker add-url --task tasks/<slug> --site centanet --url "https://..."
 ```
 
+Generate and send a daily report:
+
+```bash
+python3 -m hk_rental_tracker daily-report --task tasks/<slug> --send telegram,email,webhook
+```
+
+Report delivery channels:
+
+- `telegram`: requires `HK_RENTAL_TRACKER_TELEGRAM_BOT_TOKEN` and `HK_RENTAL_TRACKER_TELEGRAM_CHAT_ID`.
+- `email`: requires SMTP host/from/to settings and optional SMTP username/password.
+- `webhook`: requires `HK_RENTAL_TRACKER_WEBHOOK_URL`; optionally set `HK_RENTAL_TRACKER_WEBHOOK_FORMAT` to `json` or `text`, and `HK_RENTAL_TRACKER_WEBHOOK_TOKEN` for Bearer auth.
+
 ## Data Semantics
 
 - `first_seen_at`: first local observation.
@@ -80,6 +94,7 @@ python3 -m hk_rental_tracker add-url --task tasks/<slug> --site centanet --url "
 - Do not run browser-based verification during normal scans. Do not call `verify-web`, Browser, or Chrome unless the user explicitly asks for frontend evidence or a site adapter is being debugged.
 - Validate routine scans with scan output, source error status, generated snapshots, and `exports/summary.md`.
 - Daily reports must include a `租盘降价` section for listings that dropped rent that day. Include the basic listing fields, previous/current rent, drop amount, drop percentage, source link, and local listing age.
+- Before an initial scan for a newly scoped task, ask whether to set up routine daily scan/report automation and push delivery; do not assume push is desired.
 - Database-backed queries and exports should mark listings that have ever dropped rent with `ever_rent_decreased`.
 - Keep site-specific scraping changes in `hk_rental_tracker/adapters/`, `site_catalog.py`, or extraction helpers.
 - Keep analysis and database changes source-agnostic unless the user asks for source-specific behavior.

@@ -207,6 +207,13 @@ python3 -m hk_rental_tracker add-url --task tasks/<slug> --site centanet --url "
 
 - **Telegram 发送**：配置 `HK_RENTAL_TRACKER_TELEGRAM_BOT_TOKEN` 及 `HK_RENTAL_TRACKER_TELEGRAM_CHAT_ID` 环境变量，随后执行 `python3 -m hk_rental_tracker daily-report --task tasks/<slug> --send telegram`。
 - **电子邮件发送**：配置 SMTP 相关环境变量，随后执行 `python3 -m hk_rental_tracker daily-report --task tasks/<slug> --send email`。
+- **通用 Webhook 发送**：配置 `HK_RENTAL_TRACKER_WEBHOOK_URL`，可选配置 `HK_RENTAL_TRACKER_WEBHOOK_FORMAT`（`json` 或 `text`，默认 `json`）及 `HK_RENTAL_TRACKER_WEBHOOK_TOKEN`，随后执行 `python3 -m hk_rental_tracker daily-report --task tasks/<slug> --send webhook`。此通道可接入 Bark、ntfy、IFTTT、Zapier、Make、Slack/飞书/企业微信 Incoming Webhook 或自建接收端。
+
+多个通道可用逗号合并，例如：
+
+```bash
+python3 -m hk_rental_tracker daily-report --task tasks/<slug> --send telegram,email,webhook
+```
 
 ## 浏览器验证规范
 

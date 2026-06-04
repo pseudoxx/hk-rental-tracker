@@ -166,6 +166,9 @@ def send_report(markdown_path: Path, channels: list[str]) -> list[str]:
         elif normalized == "email":
             _send_email(markdown_path)
             sent.append("email")
+        elif normalized == "webhook":
+            _send_webhook(markdown_path)
+            sent.append("webhook")
         else:
             raise ValueError(f"未知发送通道：{channel}")
     return sent
@@ -1299,6 +1302,43 @@ def _send_email(markdown_path: Path) -> None:
             if username and password:
                 smtp.login(username, password)
             smtp.send_message(message)
+
+
+def _send_webhook(markdown_path: Path) -> None:
+    _load_private_env()
+    url = os.environ.get("HK_RENTAL_TRACKER_WEBHOOK_URL")
+    if not url:
+        raise RuntimeError("Webhook 发送需要设置 HK_RENTAL_TRACKER_WEBHOOK_URL。")
+
+    text = markdown_path.read_text(encoding="utf-8")
+    title = markdown_path.stem.replace("_", " ")
+    output_format = os.environ.get("HK_RENTAL_TRACKER_WEBHOOK_FORMAT", "json").strip().lower()
+    headers = {"User-Agent": "hk-rental-tracker/0.1"}
+    token = os.environ.get("HK_RENTAL_TRACKER_WEBHOOK_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    if output_format == "text":
+        data = text.encode("utf-8")
+        headers["Content-Type"] = "text/plain; charset=utf-8"
+    elif output_format == "json":
+        data = json.dumps({"title": title, "text": text, "filename": markdown_path.name}, ensure_ascii=False).encode("utf-8")
+        headers["Content-Type"] = "application/json; charset=utf-8"
+    else:
+        raise RuntimeError("HK_RENTAL_TRACKER_WEBHOOK_FORMAT 只支持 json 或 text。")
+
+    request = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            status = getattr(response, "status", None)
+            if status is None:
+                status = response.getcode()
+            body = response.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Webhook 发送失败：HTTP {exc.code}; {body}") from exc
+    if status < 200 or status >= 300:
+        raise RuntimeError(f"Webhook 发送失败：HTTP {status}; {body}")
 
 
 def _age_days(start: str | None, end: str | None) -> float | None:

@@ -31,9 +31,18 @@ Optional rounds can include:
 - Unit details: usable area, gross area, building age, and price per usable sqft.
 - Text filters: required keywords, allowed estates, excluded estates, and excluded keywords.
 - Sources: default to `midland`, `centanet`, `hkp`, and `ricacorp`.
-- Output and operations: local reports by default, optional Telegram/email push, and optional one-off or daily automation.
+- Output and operations: local reports by default, optional Telegram/email/webhook push, and optional one-off or daily automation.
 
 If the user gives only the target market and layout, create a useful task with conservative defaults and leave optional filters empty. Optional filters can be added later as the user's search changes.
+
+After the user has provided enough scope to create the task, and before running the initial scan, ask whether they want an automation for routine daily scans, daily report generation, and report delivery. Keep this as one short decision point, not a blocker for the initial scan. If they say yes, collect only the operational choices needed to set it up:
+
+- Daily scan/report time and timezone.
+- Whether to generate the report after every scan or only after the final scan of the day.
+- Delivery channels: local-only, Telegram, email, webhook, or a comma-separated combination.
+- Whether credentials are already available in environment variables or the private env file.
+
+Do not ask the user to paste secrets into `tracker.json`, task README files, reports, or committed docs. Use environment variables or the private local env file for tokens, SMTP credentials, and webhook URLs.
 
 ## 3. Task Directory And Config
 
@@ -265,9 +274,15 @@ A daily automation should run the normal workflow without browser verification:
 2. Inspect scan status, source errors, latest snapshot, and `exports/summary.md`.
 3. Treat failed or suspicious zero-result sources as scan quality issues, not market delisting evidence.
 4. Generate `daily-report` only after the final scan of the day.
-5. Optionally send Telegram or email only when environment configuration exists.
+5. Optionally send Telegram, email, or webhook only when environment configuration exists.
 
 Automation summaries should explicitly mention partial failures and should avoid interpreting missing records from failed sources as real removals.
+
+Supported report delivery channels:
+
+- `telegram`: sends a message preview and Markdown document using Telegram bot credentials.
+- `email`: sends the Markdown report as body and attachment using SMTP settings.
+- `webhook`: sends the report to `HK_RENTAL_TRACKER_WEBHOOK_URL`; defaults to JSON with `title`, `text`, and `filename`, or sends plain text when `HK_RENTAL_TRACKER_WEBHOOK_FORMAT=text`.
 
 ## 12. Skill Packaging Shape
 

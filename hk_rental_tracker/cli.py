@@ -71,7 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     daily_report = sub.add_parser("daily-report", help="生成日终市场报告")
     daily_report.add_argument("--task", required=True)
     daily_report.add_argument("--date", help="报告日期 YYYY-MM-DD；默认使用最新一次成功扫描所在日期")
-    daily_report.add_argument("--send", help="发送通道，例如 telegram,email；默认只保存本地文件")
+    daily_report.add_argument("--send", help="发送通道，例如 telegram,email,webhook；默认只保存本地文件")
     daily_report.add_argument("--print", action="store_true", help="生成后同时打印报告正文")
 
     verify_web = sub.add_parser("verify-web", help="核对网页端总数并保存截图")
