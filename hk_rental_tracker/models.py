@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from .normalization import normalize_loose, normalize_text, split_terms, stable_hash
+from .normalization import canonical_layout, layout_bedroom_count, normalize_layout_terms, normalize_loose, normalize_text, split_terms, stable_hash
 
 
 @dataclass
@@ -37,7 +37,7 @@ class SearchFilters:
             max_building_age_years=data.get("max_building_age_years") or data.get("max_building_age"),
             min_price_per_sqft=data.get("min_price_per_sqft") or data.get("min_psf"),
             max_price_per_sqft=data.get("max_price_per_sqft") or data.get("max_psf"),
-            layouts=list(data.get("layouts") or []),
+            layouts=normalize_layout_terms(data.get("layouts") or []),
             estates=list(data.get("estates") or []),
             keywords=list(data.get("keywords") or []),
             excluded_estates=list(data.get("excluded_estates") or data.get("estate_blacklist") or []),
@@ -93,9 +93,15 @@ class SearchFilters:
             if observation.price_per_sqft is None or observation.price_per_sqft > self.max_price_per_sqft:
                 return False
         if self.layouts:
-            layout_text = normalize_text(observation.layout or observation.title or "")
-            if not any(normalize_text(term) in layout_text for term in self.layouts):
-                return False
+            desired_counts = {count for count in (layout_bedroom_count(term) for term in self.layouts) if count is not None}
+            observed_count = layout_bedroom_count(observation.layout or observation.title or "")
+            if desired_counts:
+                if observed_count not in desired_counts:
+                    return False
+            else:
+                layout_text = normalize_text(observation.layout or observation.title or "")
+                if not any(normalize_text(term) in layout_text for term in self.layouts):
+                    return False
         if self.estates:
             estate_text = normalize_text(observation.estate_name or observation.title or "")
             if not any(normalize_text(term) in estate_text for term in self.estates):
@@ -146,7 +152,7 @@ class ListingObservation:
         self.block = normalize_loose(self.block)
         self.floor = normalize_loose(self.floor)
         self.flat = normalize_loose(self.flat)
-        self.layout = normalize_loose(self.layout)
+        self.layout = canonical_layout(self.layout) if self.layout else ""
         self.address = normalize_loose(self.address)
         self.district = normalize_loose(self.district)
         self.raw = {}
@@ -224,7 +230,7 @@ def make_filters(
         max_building_age_years=max_building_age_years,
         min_price_per_sqft=min_price_per_sqft,
         max_price_per_sqft=max_price_per_sqft,
-        layouts=split_terms(layouts),
+        layouts=normalize_layout_terms(layouts),
         estates=split_terms(estates),
         keywords=split_terms(keywords),
         excluded_estates=split_terms(excluded_estates),

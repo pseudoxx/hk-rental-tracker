@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 from hk_rental_tracker.adapters import SiteScanResult
 from hk_rental_tracker.config import create_task_config, save_task_config
-from hk_rental_tracker.daily_report import generate_daily_report, send_report
+from hk_rental_tracker.daily_report import _budget_stats, generate_daily_report, send_report
 from hk_rental_tracker.models import ListingObservation
 from hk_rental_tracker.scanner import scan_task
 from hk_rental_tracker.storage import RentalStore
@@ -513,6 +513,23 @@ class StorageTests(unittest.TestCase):
             self.assertTrue(result.csv_paths["new_listings"].exists())
             self.assertTrue(result.csv_paths["rent_changes"].exists())
             self.assertTrue(result.csv_paths["rent_decreases"].exists())
+
+    def test_budget_stats_uses_database_distribution_bands(self) -> None:
+        current_rows = [{"rent_hkd": 33000, "layout": "2房", "price_per_sqft": 55.0}]
+        reference_rows = [
+            {"rent_hkd": 33000, "layout": "2房", "price_per_sqft": 55.0},
+            {"rent_hkd": 62000, "layout": "3房", "price_per_sqft": 70.0},
+            {"rent_hkd": 88000, "layout": "3房", "price_per_sqft": 85.0},
+            {"rent_hkd": 146000, "layout": "4房", "price_per_sqft": 95.0},
+            {"rent_hkd": 238000, "layout": "4房", "price_per_sqft": 120.0},
+        ]
+
+        rows = _budget_stats(current_rows, [], [], [], reference_rows)
+
+        self.assertGreater(len(rows), 1)
+        self.assertNotEqual([row["rent_band"] for row in rows], ["<=15k", "15k-16k", "16k-18k", "18k-20k", ">20k"])
+        self.assertEqual(sum(row["active_count"] for row in rows), 1)
+        self.assertTrue(all("rent_lower" in row and "rent_upper" in row for row in rows))
 
     def test_send_report_posts_webhook_json(self) -> None:
         class FakeResponse:

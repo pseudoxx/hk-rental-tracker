@@ -8,7 +8,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 from .models import ListingObservation
-from .normalization import normalize_loose, normalize_text, now_iso, parse_int, stable_hash
+from .normalization import canonical_layout, normalize_loose, normalize_text, now_iso, parse_int, stable_hash
 from .site_catalog import base_url, id_patterns
 
 
@@ -147,17 +147,17 @@ def parse_price_per_sqft(text: str) -> float | None:
 def parse_layout(text: str) -> str | None:
     patterns = [
         r"(開放式|开放式)",
-        r"([0-9一二三四五六七八九十]\s*房\s*(?:\([0-9一二三四五六七八九十]\s*套房\))?)",
-        r"([0-9一二三四五六七八九十]\s*房\s*[0-9一二三四五六七八九十]?\s*(?:厅|廳))",
+        r"([0-9一二两兩三四五六七八九十]\s*房\s*(?:\([0-9一二两兩三四五六七八九十]\s*套房\))?)",
+        r"([0-9一二两兩三四五六七八九十]\s*房\s*[0-9一二两兩三四五六七八九十]?\s*(?:厅|廳))",
     ]
     for pattern in patterns:
         match = re.search(pattern, text)
         if match:
             layout = re.sub(r"\s+", "", match.group(1))
-            bedroom_match = re.match(r"([0-9一二三四五六七八九十]房)", layout)
+            bedroom_match = re.match(r"([0-9一二两兩三四五六七八九十]房)", layout)
             if bedroom_match and "厅" not in layout and "廳" not in layout:
-                return bedroom_match.group(1)
-            return layout
+                return canonical_layout(bedroom_match.group(1))
+            return canonical_layout(layout)
     return None
 
 

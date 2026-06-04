@@ -258,6 +258,97 @@ def normalize_loose(value: str | None) -> str:
     return text
 
 
+_CHINESE_DIGITS = {
+    "零": 0,
+    "〇": 0,
+    "一": 1,
+    "壹": 1,
+    "二": 2,
+    "贰": 2,
+    "貳": 2,
+    "两": 2,
+    "兩": 2,
+    "三": 3,
+    "叁": 3,
+    "參": 3,
+    "四": 4,
+    "肆": 4,
+    "五": 5,
+    "伍": 5,
+    "六": 6,
+    "陆": 6,
+    "陸": 6,
+    "七": 7,
+    "柒": 7,
+    "八": 8,
+    "捌": 8,
+    "九": 9,
+    "玖": 9,
+}
+
+_ENGLISH_DIGITS = {
+    "zero": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+}
+
+
+def parse_chinese_int(value: str | None) -> int | None:
+    if not value:
+        return None
+    text = normalize_text(value)
+    if not text:
+        return None
+    if text.isdigit():
+        return int(text)
+    if text == "十":
+        return 10
+    if "十" in text:
+        left, _, right = text.partition("十")
+        tens = _CHINESE_DIGITS.get(left, 1) if left else 1
+        ones = _CHINESE_DIGITS.get(right, 0) if right else 0
+        return tens * 10 + ones
+    if len(text) == 1:
+        return _CHINESE_DIGITS.get(text)
+    return None
+
+
+def layout_bedroom_count(value: str | None) -> int | None:
+    text = normalize_loose(value)
+    if not text:
+        return None
+    lowered = text.lower()
+    if "开放式" in lowered or "開放式" in lowered or "studio" in lowered or "open plan" in lowered or "open-plan" in lowered:
+        return 0
+    digit_match = re.search(r"(\d+)[\s-]*(?:房|室|居室|居|bedrooms?|beds?|br\b)", lowered)
+    if digit_match:
+        return int(digit_match.group(1))
+    english_match = re.search(r"\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)[\s-]*(?:bedrooms?|beds?|br)\b", lowered)
+    if english_match:
+        return _ENGLISH_DIGITS.get(english_match.group(1))
+    chinese_match = re.search(r"([零〇一二两兩三四五六七八九十壹贰貳叁參肆伍陆陸柒捌玖]+)\s*(?:房|室|居室|居)", text)
+    if chinese_match:
+        return parse_chinese_int(chinese_match.group(1))
+    return None
+
+
+def canonical_layout(value: str | None) -> str:
+    count = layout_bedroom_count(value)
+    if count == 0:
+        return "开放式"
+    if count is not None:
+        return f"{count}房"
+    return normalize_loose(value)
+
+
 def text_variants(value: str) -> list[str]:
     base = unicodedata.normalize("NFKC", value).strip()
     variants = {base, base.translate(_TRAD_TO_SIMPLE), base.translate(_SIMPLE_TO_TRAD_LIGHT)}
@@ -278,6 +369,18 @@ def split_terms(value: str | Iterable[str] | None) -> list[str]:
         for item in value:
             raw.extend(re.split(r"[,，+＋/、\n]+", str(item)))
     return [x.strip() for x in raw if x and x.strip()]
+
+
+def normalize_layout_terms(value: str | Iterable[str] | None) -> list[str]:
+    terms = split_terms(value)
+    normalized: list[str] = []
+    seen = set()
+    for term in terms:
+        layout = canonical_layout(term)
+        if layout and layout not in seen:
+            seen.add(layout)
+            normalized.append(layout)
+    return normalized
 
 
 def parse_int(value: str | int | float | None) -> int | None:

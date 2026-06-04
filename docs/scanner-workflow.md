@@ -21,7 +21,7 @@ Default to a Traditional-Chinese-friendly style for Hong Kong rental workflows, 
 Before creating scan state, collect the minimum viable task scope:
 
 - Target market: area, estate, or aliases.
-- Layout: studio/open-plan and/or one-, two-, three-, or four-bedroom units.
+- Layout: studio/open-plan and/or one-, two-, three-, or four-bedroom units. Normalize natural input such as `两房`, `兩房`, `二房`, and `2 bedroom` to canonical scanner terms such as `2房` before saving the task or pushing API filters.
 
 Ask for optional filters in short rounds, and always give the user an easy way to skip. Do not ask for every possible filter in one message.
 
@@ -241,7 +241,7 @@ Daily reports should include:
 
 - New listings.
 - Rent drops in a `租盘降价` section.
-- Budget stats.
+- Budget stats using rent bands derived dynamically from the whole local listing database's rent distribution, not fixed hard-coded budget thresholds.
 - Source disappearance lag.
 - Fresh-value watchlist.
 - Stale-value watchlist.

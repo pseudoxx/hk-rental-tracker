@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import SearchFilters
-from .normalization import now_iso, split_terms, text_variants
+from .normalization import normalize_layout_terms, now_iso, split_terms, text_variants
 
 
 DEFAULT_SITES = ["midland", "centanet", "hkp", "ricacorp"]
@@ -142,7 +142,7 @@ def create_task_config(
         max_building_age_years=max_building_age_years,
         min_price_per_sqft=min_price_per_sqft,
         max_price_per_sqft=max_price_per_sqft,
-        layouts=split_terms(layouts),
+        layouts=normalize_layout_terms(layouts),
         estates=split_terms(estates),
         keywords=split_terms(keywords),
         excluded_estates=split_terms(excluded_estates),

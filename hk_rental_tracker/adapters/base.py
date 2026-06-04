@@ -17,7 +17,7 @@ from ..config import TaskConfig
 from ..extractors import observations_from_html
 from ..fetcher import PageFetcher
 from ..models import ListingObservation
-from ..normalization import normalize_loose, now_iso
+from ..normalization import layout_bedroom_count, normalize_loose, now_iso
 from ..site_catalog import candidate_urls
 from ..source_capabilities import can_pushdown
 
@@ -441,12 +441,9 @@ def _centanet_filter_payload(config: TaskConfig) -> dict[str, object]:
 def _bedroom_values(layouts: list[str]) -> list[int]:
     values: set[int] = set()
     for layout in layouts:
-        normalized = normalize_loose(layout)
-        if "开放式" in normalized:
-            values.add(0)
-        match = re.search(r"(\d+)\s*房", normalized)
-        if match:
-            values.add(int(match.group(1)))
+        count = layout_bedroom_count(layout)
+        if count is not None:
+            values.add(count)
     return sorted(values)
 
 

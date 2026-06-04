@@ -19,6 +19,15 @@ class ExtractionTests(unittest.TestCase):
         self.assertEqual(obs.district, "示例区")
         self.assertIn("Example Residence", obs.estate_name or "")
 
+    def test_parse_chinese_two_bedroom_layout_as_canonical_layout(self) -> None:
+        text = "中原地产 bookmark 示例苑 1座 中层 J室 两房 示例区 实用 实 450 呎 租 $ 22,000"
+
+        obs = parse_observation_from_text("centanet", "https://hk.centanet.com/findproperty/detail/X_ABC123", text, ["示例区"])
+
+        self.assertIsNotNone(obs)
+        assert obs is not None
+        self.assertEqual(obs.layout, "2房")
+
     def test_parse_midland_detail_text(self) -> None:
         text = (
             "示例苑 1B座 低层 E室 location 示例区 示例道21号 租 $16,000 "

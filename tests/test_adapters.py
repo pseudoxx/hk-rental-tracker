@@ -44,6 +44,24 @@ class AdapterPayloadTests(unittest.TestCase):
         self.assertEqual(params["net_ft_price_to"], "45")
         self.assertEqual(params["bedroom"], "2")
 
+    def test_layout_chinese_number_pushes_bedroom_filter(self) -> None:
+        config = create_task_config(
+            slug="demo-market",
+            area="示例区",
+            max_rent=30000,
+            min_rent=None,
+            layouts="两房,四房",
+            estates=None,
+            sites="midland,centanet",
+        )
+
+        midland_params = _common_property_params(config, lang="zh-hk")
+        centanet_payload = _centanet_filter_payload(config)
+
+        self.assertEqual(config.filters.layouts, ["2房", "4房"])
+        self.assertEqual(midland_params["bedroom"], "2,4")
+        self.assertEqual(centanet_payload["bedroomCount"], [2, 4])
+
     def test_ricacorp_state_parser_reads_server_rendered_posts(self) -> None:
         html = """
         <script id="serverApp-state" type="application/json">

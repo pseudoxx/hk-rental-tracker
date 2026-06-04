@@ -21,7 +21,7 @@ Use this skill when the user asks to operate or discuss the local Hong Kong rent
 When the user asks to create, start, initialize, configure, scan, or track a market without giving full parameters:
 
 1. Check whether `tasks/` already contains tracked markets and summarize the available choices if any exist.
-2. If no target market is clear, ask for the minimum required setup details: area or estate, layout, and any hard budget limit.
+2. If no target market is clear, ask for the minimum required setup details: area or estate, layout, and any hard budget limit. Normalize layout phrasing such as `两房`, `兩房`, `二房`, and `2 bedroom` to canonical scanner terms such as `2房`.
 3. Create the task with conservative defaults and default sources (`midland`, `centanet`, `hkp`, `ricacorp`) once the minimum details are known.
 4. Before running the initial scan, ask whether the user wants routine automation for daily scans, daily report generation, and report delivery. Keep this as a short yes/no decision so the initial scan is not blocked unnecessarily.
 5. If the user wants automation, collect the daily run time/timezone, whether reports should be generated only after the final scan of the day, and desired delivery channels (`local`, `telegram`, `email`, `webhook`, or a comma-separated combination). Use environment variables or the private local env file for credentials; never write tokens, SMTP passwords, webhook URLs, or other secrets into task files or committed docs.
@@ -94,6 +94,7 @@ Report delivery channels:
 - Do not run browser-based verification during normal scans. Do not call `verify-web`, Browser, or Chrome unless the user explicitly asks for frontend evidence or a site adapter is being debugged.
 - Validate routine scans with scan output, source error status, generated snapshots, and `exports/summary.md`.
 - Daily reports must include a `租盘降价` section for listings that dropped rent that day. Include the basic listing fields, previous/current rent, drop amount, drop percentage, source link, and local listing age.
+- Daily report budget bands must be derived from the whole local database's rent distribution, not fixed hard-coded thresholds.
 - Before an initial scan for a newly scoped task, ask whether to set up routine daily scan/report automation and push delivery; do not assume push is desired.
 - Database-backed queries and exports should mark listings that have ever dropped rent with `ever_rent_decreased`.
 - Keep site-specific scraping changes in `hk_rental_tracker/adapters/`, `site_catalog.py`, or extraction helpers.

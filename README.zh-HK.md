@@ -136,7 +136,7 @@ python3 -m hk_rental_tracker query --task tasks/<slug> --active-only --limit 50
 
 - **優先聯絡名單**：具備低呎租、預算友善，且經跨來源確認之新增租盤。
 - **降價清單**：列出降價房源之降幅、比例、過往與當前租金、來源及本地盤齡。
-- 各預算區間之活躍供應量及增減情況。
+- 按本地數據庫整體租金分布動態切分之預算區間活躍供應量及增減情況。
 - 過去 30 天內來源下架紀錄（按本地盤齡分組），以利觀察網頁撤盤延遲及市場消化速度。
 - 盤齡逾 14 天且價格顯著偏低之待覆核清單（可能為已租未撤或引流之舊盤）。
 - 本地盤齡統計，協助區分全新房源與長期掛牌房源。
@@ -152,7 +152,7 @@ python3 -m hk_rental_tracker query --task tasks/<slug> --active-only --limit 50
 - `filters.min_gross_area_sqft` / `filters.max_gross_area_sqft`：建築面積上下限。本地強制過濾，確認支援之 API 將同步下推。
 - `filters.min_building_age_years` / `filters.max_building_age_years`：樓齡上下限。本地強制過濾，確認支援之 API 將同步下推。
 - `filters.min_price_per_sqft` / `filters.max_price_per_sqft`：實用呎租上下限。根據 API 回傳之呎租或本地計算結果進行過濾。
-- `filters.layouts`：目標戶型。
+- `filters.layouts`：目標戶型。系統會將「兩房」、「二房」、「2 bedroom」等輸入標準化為 `2房`，並同步用於 API 下推及本地過濾。
 - `filters.keywords`：必須包含之關鍵詞，用於精確鎖定屋苑、地址、設施或描述。
 - `filters.excluded_estates`：屋苑黑名單，符合此名單之房源將被排除。
 - `filters.excluded_keywords`：通用關鍵詞黑名單，用於排除特定區域、地址或描述。

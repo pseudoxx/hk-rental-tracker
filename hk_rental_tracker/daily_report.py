@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import os
 import smtplib
 import ssl
@@ -82,7 +83,8 @@ def generate_daily_report(
         rent_decreases = [row for row in rent_changes if row.get("rent_delta_hkd") is not None and row["rent_delta_hkd"] < 0]
         value_rows = _value_rows(current_rows, target_run.cutoff)
         fresh_value_rows = _fresh_value_rows(new_rows, current_rows, target_run.cutoff)
-        budget_stats = _budget_stats(current_rows, previous_rows, new_rows, removed_rows)
+        budget_reference_rows = _rent_distribution_rows(conn)
+        budget_stats = _budget_stats(current_rows, previous_rows, new_rows, removed_rows, budget_reference_rows)
         withdrawal_rows = _withdrawal_signal_rows(conn, target_run.cutoff)
         withdrawal_lag_stats = _withdrawal_lag_stats(withdrawal_rows)
         stale_value_rows = _stale_value_rows(current_rows, target_run.cutoff)
@@ -482,6 +484,23 @@ def _daily_velocity(conn: Connection, target_date: date) -> list[dict[str, Any]]
     return rows
 
 
+def _rent_distribution_rows(conn: Connection) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        """
+        SELECT
+            id,
+            layout,
+            last_rent_hkd AS rent_hkd,
+            usable_area_sqft,
+            last_price_per_sqft AS price_per_sqft
+        FROM listings
+        WHERE last_rent_hkd IS NOT NULL
+        ORDER BY last_rent_hkd ASC
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def _value_rows(rows: list[dict[str, Any]], cutoff: str, limit: int = 25) -> list[dict[str, Any]]:
     stats = _stats_by_layout(rows)
     candidates = []
@@ -522,26 +541,21 @@ def _budget_stats(
     previous_rows: list[dict[str, Any]],
     new_rows: list[dict[str, Any]],
     removed_rows: list[dict[str, Any]],
+    reference_rows: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    bands = [
-        ("<=15k", None, 15000),
-        ("15k-16k", 15001, 16000),
-        ("16k-18k", 16001, 18000),
-        ("18k-20k", 18001, 20000),
-        (">20k", 20001, None),
-    ]
+    bands = _dynamic_rent_bands(reference_rows or current_rows)
     rows = []
     layouts = sorted({row.get("layout") or "未标明" for row in current_rows})
     for label, lower, upper in bands:
         current = _rows_in_rent_band(current_rows, lower, upper)
-        if not current and label == ">20k":
-            continue
         previous = _rows_in_rent_band(previous_rows, lower, upper)
         today_new = _rows_in_rent_band(new_rows, lower, upper)
         today_removed = _rows_in_rent_band(removed_rows, lower, upper)
         stats = _basic_stats(current)
         row: dict[str, Any] = {
             "rent_band": label,
+            "rent_lower": lower,
+            "rent_upper": upper,
             "active_count": len(current),
             "active_delta_day": len(current) - len(previous) if previous_rows else None,
             "new_count": len(today_new),
@@ -553,6 +567,54 @@ def _budget_stats(
             row[f"layout_{layout}"] = sum(1 for item in current if (item.get("layout") or "未标明") == layout)
         rows.append(row)
     return rows
+
+
+def _dynamic_rent_bands(rows: list[dict[str, Any]], target_count: int = 5) -> list[tuple[str, int | None, int | None]]:
+    rents = sorted(int(row["rent_hkd"]) for row in rows if row.get("rent_hkd") is not None)
+    if not rents:
+        return []
+    min_rent = rents[0]
+    max_rent = rents[-1]
+    if min_rent == max_rent:
+        return [(compact_money(min_rent), min_rent, max_rent)]
+
+    step = _nice_rent_step((max_rent - min_rent) / max(1, target_count))
+    thresholds: list[int] = []
+    for index in range(1, target_count):
+        position = min(len(rents) - 1, max(0, math.ceil(len(rents) * index / target_count) - 1))
+        raw_threshold = rents[position]
+        threshold = int(math.ceil(raw_threshold / step) * step)
+        if min_rent <= threshold < max_rent and (not thresholds or threshold > thresholds[-1]):
+            thresholds.append(threshold)
+
+    if not thresholds:
+        midpoint = int(math.ceil(((min_rent + max_rent) / 2) / step) * step)
+        if min_rent <= midpoint < max_rent:
+            thresholds.append(midpoint)
+
+    bands: list[tuple[str, int | None, int | None]] = []
+    previous_upper: int | None = None
+    for threshold in thresholds:
+        lower = None if previous_upper is None else previous_upper + 1
+        label = f"<={compact_money(threshold)}" if previous_upper is None else f"{compact_money(previous_upper + 1)}-{compact_money(threshold)}"
+        bands.append((label, lower, threshold))
+        previous_upper = threshold
+    if previous_upper is None:
+        bands.append((f"{compact_money(min_rent)}-{compact_money(max_rent)}", min_rent, max_rent))
+    else:
+        bands.append((f">{compact_money(previous_upper)}", previous_upper + 1, None))
+    return bands
+
+
+def _nice_rent_step(value: float) -> int:
+    if value <= 0:
+        return 1000
+    magnitude = 10 ** math.floor(math.log10(value))
+    for multiplier in (1, 2, 5, 10):
+        step = int(multiplier * magnitude)
+        if step >= value:
+            return max(500, step)
+    return max(500, int(10 * magnitude))
 
 
 def _rows_in_rent_band(rows: list[dict[str, Any]], lower: int | None, upper: int | None) -> list[dict[str, Any]]:
@@ -1193,6 +1255,8 @@ def _write_budget_stats_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     extra_columns = sorted({key for row in rows for key in row if key.startswith("layout_")})
     columns = [
         "rent_band",
+        "rent_lower",
+        "rent_upper",
         "active_count",
         "active_delta_day",
         "new_count",

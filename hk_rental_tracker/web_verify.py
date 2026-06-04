@@ -22,7 +22,7 @@ from .adapters.base import (
 )
 from .config import TaskConfig, load_task_config
 from .fetcher import PageFetcher
-from .normalization import normalize_loose
+from .normalization import layout_bedroom_count, normalize_loose
 from .scanner import filter_observations
 
 
@@ -506,23 +506,22 @@ def _frontend_filter_status(config: TaskConfig, check: WebTotalCheck) -> str:
 def _frontend_layout_terms(config: TaskConfig) -> list[str]:
     terms: list[str] = []
     for layout in config.filters.layouts:
-        normalized = normalize_loose(layout)
-        if "开放式" in normalized or "開放式" in normalized:
+        count = layout_bedroom_count(layout)
+        if count == 0:
             terms.extend(["开放式", "開放式"])
-        if "1房" in normalized or "一房" in normalized:
-            terms.extend(["1房", "一房"])
+        elif count is not None:
+            terms.append(f"{count}房")
     return [normalize_loose(term) for term in terms]
 
 
 def _frontend_layout_labels(config: TaskConfig) -> list[str]:
     labels: list[str] = []
     for layout in config.filters.layouts:
-        normalized = normalize_loose(layout)
-        if "开放式" in normalized or "開放式" in normalized:
+        count = layout_bedroom_count(layout)
+        if count == 0:
             labels.extend(["開放式", "开放式"])
-        match = None if "开放式" in normalized or "開放式" in normalized else re.search(r"(\d+)\s*房", normalized)
-        if match:
-            labels.append(f"{match.group(1)}房")
+        elif count is not None:
+            labels.append(f"{count}房")
     seen = set()
     return [label for label in labels if not (label in seen or seen.add(label))]
 

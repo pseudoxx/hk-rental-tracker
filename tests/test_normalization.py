@@ -2,7 +2,7 @@ import unittest
 
 from hk_rental_tracker.config import create_task_config
 from hk_rental_tracker.models import ListingObservation
-from hk_rental_tracker.normalization import normalize_text, text_variants
+from hk_rental_tracker.normalization import canonical_layout, layout_bedroom_count, normalize_text, text_variants
 
 
 HK_MARKET_AREA_PAIRS = [
@@ -147,6 +147,47 @@ HK_MARKET_AREA_PAIRS = [
 
 
 class NormalizationTests(unittest.TestCase):
+    def test_layout_terms_normalize_chinese_numbers_and_english(self) -> None:
+        config = create_task_config(
+            slug="demo-market",
+            area="示例区",
+            max_rent=30000,
+            min_rent=None,
+            layouts="两房,兩房,二房,2 bedroom,two-bedroom,开放式",
+            estates=None,
+            sites="hkp",
+        )
+
+        self.assertEqual(config.filters.layouts, ["2房", "开放式"])
+        self.assertEqual(canonical_layout("兩房一廳"), "2房")
+        self.assertEqual(canonical_layout("2 bedroom"), "2房")
+        self.assertEqual(canonical_layout("two-bedroom"), "2房")
+        self.assertEqual(canonical_layout("两居室"), "2房")
+        self.assertEqual(layout_bedroom_count("open-plan"), 0)
+
+    def test_layout_filter_matches_chinese_two_bedroom_input(self) -> None:
+        config = create_task_config(
+            slug="demo-market",
+            area="示例区",
+            max_rent=30000,
+            min_rent=None,
+            layouts="两房",
+            estates=None,
+            sites="hkp",
+        )
+        obs = ListingObservation(
+            source_site="hkp",
+            source_url="https://example.com/H1",
+            source_listing_id="H1",
+            fetched_at="2026-06-03T00:00:00+08:00",
+            title="示例区 示例苑 1座 中层 J室 兩房 实用 450呎 租 $22,000",
+            district="示例区",
+            rent_hkd=22000,
+            usable_area_sqft=450,
+        )
+
+        self.assertTrue(config.filters.matches(obs, config.area_terms))
+
     def test_hk_market_area_traditional_and_simplified_match(self) -> None:
         for simplified, traditional in HK_MARKET_AREA_PAIRS:
             with self.subTest(area=simplified):
