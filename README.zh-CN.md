@@ -10,6 +10,14 @@
 
 **免责声明：** 本项目为独立、非官方、本地运行的信息整理工具，仅供个人租务市场观察与分析；不提供地产代理、中介、撮合、推介、带看、议价、订约或收佣服务，亦不与任何地产代理公司存在从属、授权、背书或合作关系。使用者须自行核验租盘信息及任何 AI 输出，并确保其使用方式符合适用法律、相关网站的服务条款、授权范围及访问限制；不得用于违规自动化访问、批量抓取、绕过技术措施、商业转售或其他滥用。在法律允许范围内，因使用或滥用本工具产生的责任与后果由使用者自行承担。
 
+## 赞助支持
+
+如果这个工具对你有帮助，欢迎通过 Buy Me a Coffee 支持后续维护：
+
+<a href="https://buymeacoffee.com/pseudoxx" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" width="217" height="60"></a>
+
+懒得看这些技术细节，但希望跟踪租盘市场、想获取每日市场信息摘要？我来帮忙整理公开租盘信息与本地数据报告。请注意：这不是地产中介或代理服务，不提供带看、撮合、推介、议价、订约或任何收佣服务。
+
 ## 安装指南
 
 建议使用 Python 3.10 或以上版本：
@@ -31,42 +39,7 @@ python -m playwright install chromium
 
 执行日常扫描、摘要生成及日终报告时，无需使用浏览器。
 
-## Agent Skills
-
-本仓库内置支持多个 AI 编程助手的 Markdown Skill：
-
-```text
-skills/hk-rental-tracker/
-```
-
-在支持本地 Skills 的环境中，可将该目录安装或链接为 `hk-rental-tracker` Skill。此 Skill 将指导 Agent 遵循本项目的安全边界规范：例如执行前应先阅读项目说明与扫描工作流，日常扫描中不默认调用浏览器，且遭遇来源请求失败或零结果时不应误判为房源下架。
-
-## Agent 兼容性
-
-`skills/hk-rental-tracker/SKILL.md` 的核心内容为 Markdown 格式的工作流说明，具备高可移植性。不同 Agent 的识别方式如下：
-
-- **Codex**：使用 `skills/hk-rental-tracker/SKILL.md` 及 `skills/hk-rental-tracker/agents/openai.yaml`。
-- **Claude Code**：可使用 `CLAUDE.md` 与 `.claude/skills/hk-rental-tracker/SKILL.md` 供自动发现。
-- **OpenClaw**：自动读取工作目录下的 `skills/` 目录。本项目的 `SKILL.md` 已包含 `metadata.openclaw` 以便提取所需信息。
-- **其他支持仓库指令的 Agent**：可读取 `AGENTS.md` 作为入口；若不支持自动读取，可手动将 `skills/hk-rental-tracker/SKILL.md` 的内容加入至该 Agent 的自定义指令中。
-
-上述所有兼容入口均共享同一原则：日常扫描不默认执行浏览器验证，且来源异常不应解释为真实下架。
-
 ## 快速入门
-
-### 使用 Agent Skill 启动
-
-Clone 本仓库后，可直接用支持仓库指令或本地 Skills 的 Agent 打开此文件夹，然后用自然语言说明想启动租盘追踪即可，例如：
-
-```text
-开始
-帮我建立一个启德两房租盘追踪
-我想追踪日出康城三万以下的盘
-```
-
-只要语意是在建立、启动、初始化或操作香港租盘追踪任务，Agent 应读取 `AGENTS.md`、`README.md` 与 `skills/hk-rental-tracker/SKILL.md`，并进入租盘追踪任务初始化流程：先询问缺失的区域或屋苑、户型及必要预算条件，再按需建立 `tasks/<slug>/`、执行首次扫描及生成摘要。
-
-### 使用 CLI 启动
 
 若希望手动执行命令，可创建跟踪任务（请将 `<...>` 替换为实际参数）：
 
@@ -140,6 +113,35 @@ python3 -m hk_rental_tracker query --task tasks/<slug> --active-only --limit 50
 - 过去 30 天内来源下架纪录（按本地盘龄分组），以利观察网页撤盘延迟及市场消化速度。
 - 盘龄逾 14 天且价格显著偏低的待复核清单（可能为已租未撤或引流的旧盘）。
 - 本地盘龄统计，协助区分全新房源与长期挂牌房源。
+
+## Agent 介绍
+
+本仓库内置支持多个 AI 编程助手的 Markdown Skill：
+
+```text
+skills/hk-rental-tracker/
+```
+
+在支持本地 Skills 的环境中，可将该目录安装或链接为 `hk-rental-tracker` Skill。此 Skill 将指导 Agent 遵循本项目的安全边界规范：例如执行前应先阅读项目说明与扫描工作流，日常扫描中不默认调用浏览器，且遭遇来源请求失败或零结果时不应误判为房源下架。
+
+Clone 本仓库后，可直接用支持仓库指令或本地 Skills 的 Agent 打开此文件夹，然后用自然语言说明想启动租盘追踪即可，例如：
+
+```text
+开始
+帮我建立一个启德两房租盘追踪
+我想追踪日出康城三万以下的盘
+```
+
+只要语意是在建立、启动、初始化或操作香港租盘追踪任务，Agent 应读取 `AGENTS.md`、`README.md` 与 `skills/hk-rental-tracker/SKILL.md`，并进入租盘追踪任务初始化流程：先询问缺失的区域或屋苑、户型及必要预算条件，再按需建立 `tasks/<slug>/`、执行首次扫描及生成摘要。
+
+`skills/hk-rental-tracker/SKILL.md` 的核心内容为 Markdown 格式的工作流说明，具备高可移植性。不同 Agent 的识别方式如下：
+
+- **Codex**：使用 `skills/hk-rental-tracker/SKILL.md` 及 `skills/hk-rental-tracker/agents/openai.yaml`。
+- **Claude Code**：可使用 `CLAUDE.md` 与 `.claude/skills/hk-rental-tracker/SKILL.md` 供自动发现。
+- **OpenClaw**：自动读取工作目录下的 `skills/` 目录。本项目的 `SKILL.md` 已包含 `metadata.openclaw` 以便提取所需信息。
+- **其他支持仓库指令的 Agent**：可读取 `AGENTS.md` 作为入口；若不支持自动读取，可手动将 `skills/hk-rental-tracker/SKILL.md` 的内容加入至该 Agent 的自定义指令中。
+
+上述所有兼容入口均共享同一原则：日常扫描不默认执行浏览器验证，且来源异常不应解释为真实下架。
 
 ## 任务配置说明
 
