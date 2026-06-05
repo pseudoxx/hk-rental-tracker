@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://pseudoxx.github.io/hk-rental-tracker/sitemap.xml
+Sitemap: https://pseudoxx.github.io/hk-rental-tracker/sitemap.txt
