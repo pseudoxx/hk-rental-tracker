@@ -18,7 +18,7 @@
 
 <a href="https://buymeacoffee.com/pseudoxx" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" width="217" height="60"></a>
 
-懒得看这些技术细节，但希望跟踪租盘市场、想获取每日市场信息摘要？我来帮忙整理公开租盘信息与本地数据报告。请注意：这不是地产中介或代理服务，不提供带看、撮合、推介、议价、订约或任何收佣服务。
+懒得看这些技术细节，但希望持续跟踪租盘市场、定期获取公开租盘信息与本地数据摘要？你可以通过 Buy Me a Coffee 订阅，让我替你运行监控和整理报告。请注意：这不是地产中介或代理服务，不提供带看、撮合、推介、议价、订约或任何收佣服务。
 
 ## 安装指南
 
