@@ -506,6 +506,7 @@ class StorageTests(unittest.TestCase):
             result = generate_daily_report(task_dir, report_date="2026-05-19")
             text = result.markdown_path.read_text(encoding="utf-8")
             self.assertIn("示例区租盘日终报告", text)
+            self.assertIn("持续跟踪：第 2 天", text)
             self.assertIn("户型价格", text)
             self.assertIn("今日租盘降价", text)
             self.assertIn("| 降幅 | 降幅比例 | 当前租金 | 昨日租金 | 实用面积(呎) | 本地盘龄 |", text)
@@ -513,6 +514,12 @@ class StorageTests(unittest.TestCase):
             self.assertTrue(result.csv_paths["new_listings"].exists())
             self.assertTrue(result.csv_paths["rent_changes"].exists())
             self.assertTrue(result.csv_paths["rent_decreases"].exists())
+            history = json.loads((task_dir / "exports" / "daily_report_history.json").read_text(encoding="utf-8"))
+            self.assertEqual(history["generated_report_dates"], ["2026-05-19"])
+
+            rerun = generate_daily_report(task_dir, report_date="2026-05-19")
+            self.assertIn("持续跟踪：第 2 天", rerun.markdown_path.read_text(encoding="utf-8"))
+            self.assertFalse((task_dir / "exports" / "daily_report_2026-05-19.html").exists())
 
     def test_budget_stats_uses_database_distribution_bands(self) -> None:
         current_rows = [{"rent_hkd": 33000, "layout": "2房", "price_per_sqft": 55.0}]

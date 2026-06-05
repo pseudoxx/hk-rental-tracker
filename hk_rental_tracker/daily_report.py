@@ -70,6 +70,9 @@ def generate_daily_report(
         target_date = target_run.local_date
         previous_run = _latest_run_on_date(conn, target_date - timedelta(days=1))
         week_run = _latest_run_on_date(conn, target_date - timedelta(days=7))
+        exports_dir = task_path / "exports"
+        exports_dir.mkdir(parents=True, exist_ok=True)
+        tracking_days = _report_tracking_days(conn, exports_dir, target_date)
 
         current_rows = _active_listing_rows(conn, target_run.cutoff)
         previous_rows = _active_listing_rows(conn, previous_run.cutoff) if previous_run else []
@@ -100,8 +103,6 @@ def generate_daily_report(
         estate_stats = _estate_stats(current_rows, previous_rows)
         daily_velocity = _daily_velocity(conn, target_date)
 
-        exports_dir = task_path / "exports"
-        exports_dir.mkdir(parents=True, exist_ok=True)
         date_label = target_date.isoformat()
         csv_paths = {
             "new_listings": exports_dir / f"daily_new_listings_{date_label}.csv",
@@ -149,10 +150,12 @@ def generate_daily_report(
             estate_stats=estate_stats,
             daily_velocity=daily_velocity,
             csv_paths=csv_paths,
+            tracking_days=tracking_days,
         )
         markdown_path = exports_dir / f"daily_report_{date_label}.md"
         markdown_path.write_text(markdown, encoding="utf-8")
         (exports_dir / "daily_report_latest.md").write_text(markdown, encoding="utf-8")
+        _record_daily_report_generation(exports_dir, target_date)
 
         if print_report:
             print(markdown)
@@ -244,6 +247,20 @@ def _latest_run_on_date(conn: Connection, target_date: date) -> RunRef | None:
     return _run_from_row(row)
 
 
+def _earliest_run(conn: Connection) -> RunRef | None:
+    row = conn.execute(
+        """
+        SELECT id, started_at, ended_at, status
+        FROM runs
+        WHERE status IN ({})
+        ORDER BY started_at ASC, id ASC
+        LIMIT 1
+        """.format(",".join("?" for _ in OK_RUN_STATUSES)),
+        OK_RUN_STATUSES,
+    ).fetchone()
+    return _run_from_row(row)
+
+
 def _run_from_row(row: Row | None) -> RunRef | None:
     if not row:
         return None
@@ -253,6 +270,67 @@ def _run_from_row(row: Row | None) -> RunRef | None:
 def _start_of_day(reference_iso: str, target_date: date) -> str:
     tz = datetime.fromisoformat(reference_iso).tzinfo or timezone(timedelta(hours=8))
     return datetime.combine(target_date, time.min, tzinfo=tz).isoformat()
+
+
+def _report_tracking_days(conn: Connection, exports_dir: Path, target_date: date) -> int:
+    initial_run = _earliest_run(conn)
+    initial_date = initial_run.local_date if initial_run else target_date
+    generated_dates = _daily_report_history_dates(exports_dir)
+    generated_dates.add(target_date.isoformat())
+    later_report_days = sum(
+        1
+        for value in generated_dates
+        if _date_in_range(value, after=initial_date, on_or_before=target_date)
+    )
+    return max(1, 1 + later_report_days)
+
+
+def _date_in_range(value: str, *, after: date, on_or_before: date) -> bool:
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        return False
+    return after < parsed <= on_or_before
+
+
+def _daily_report_history_dates(exports_dir: Path) -> set[str]:
+    dates: set[str] = set()
+    history_path = _daily_report_history_path(exports_dir)
+    if history_path.exists():
+        try:
+            payload = json.loads(history_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            payload = {}
+        if isinstance(payload, dict):
+            for value in payload.get("generated_report_dates") or []:
+                if isinstance(value, str):
+                    dates.add(value)
+    for path in exports_dir.glob("daily_report_*.md"):
+        stem = path.stem
+        if stem == "daily_report_latest":
+            continue
+        value = stem.removeprefix("daily_report_")
+        try:
+            date.fromisoformat(value)
+        except ValueError:
+            continue
+        dates.add(value)
+    return dates
+
+
+def _record_daily_report_generation(exports_dir: Path, target_date: date) -> None:
+    dates = _daily_report_history_dates(exports_dir)
+    dates.add(target_date.isoformat())
+    payload = {
+        "generated_report_dates": sorted(dates),
+        "updated_at": now_iso(),
+    }
+    path = _daily_report_history_path(exports_dir)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _daily_report_history_path(exports_dir: Path) -> Path:
+    return exports_dir / "daily_report_history.json"
 
 
 def _active_listing_rows(conn: Connection, cutoff: str) -> list[dict[str, Any]]:
@@ -801,6 +879,7 @@ def _render_report(
     estate_stats: list[dict[str, Any]],
     daily_velocity: list[dict[str, Any]],
     csv_paths: dict[str, Path],
+    tracking_days: int,
 ) -> str:
     current_stats = _basic_stats(current_rows)
     previous_stats = _basic_stats(previous_rows)
@@ -816,6 +895,7 @@ def _render_report(
         f"# {config_area}租盘日终报告",
         "",
         f"报告生成：{now_iso()}",
+        f"持续跟踪：第 {tracking_days} 天",
         f"本报告基准：run #{target_run.id}，{target_run.started_at}",
         f"昨日基准：{_run_label(previous_run)}",
         f"上周基准：{_run_label(week_run)}",
