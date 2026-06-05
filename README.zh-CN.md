@@ -2,6 +2,8 @@
 
 语言：[繁體中文（香港）](README.zh-HK.md) | [简体中文](README.zh-CN.md)
 
+项目主页：[https://pseudoxx.github.io/hk-rental-tracker/](https://pseudoxx.github.io/hk-rental-tracker/)
+
 香港租盘追踪器为一个运行于本地的香港租务市场分析工具及 Codex Skill。本项目旨在按区域或屋苑追踪美联物业、中原地产、香港置业及利嘉阁的租盘信息。系统将自动记录房源的首次出现时间、首次从来源下架时间、租金、实用面积、尺租、具体楼层与室号，以及其于各平台的历史动态。
 
 当前版本已构建基础通用框架，包含本地任务管理、SQLite 数据库、站点适配器、网页解析、数据去重、每日扫描状态维护及报表导出等功能。各中介网站的具体搜索 URL 与网页元素选择器均集中于 `hk_rental_tracker/adapters/` 目录，以便于网站改版时进行集中调整。

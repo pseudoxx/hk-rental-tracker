@@ -2,6 +2,8 @@
 
 語言：[繁體中文（香港）](README.zh-HK.md) | [简体中文](README.zh-CN.md)
 
+項目主頁：[https://pseudoxx.github.io/hk-rental-tracker/](https://pseudoxx.github.io/hk-rental-tracker/)
+
 香港租盤追蹤器為一本地運行之香港租務市場分析工具及 Codex Skill。本項目旨在按區域或屋苑追蹤美聯物業、中原地產、香港置業及利嘉閣之租盤資訊。系統將自動記錄房源之首次出現時間、首次從來源下架時間、租金、實用面積、呎租、具體樓層與室號，以及其於各平台之歷史動態。
 
 當前版本已構建基礎通用框架，包含本地任務管理、SQLite 數據庫、站點適配器、網頁解析、數據去重、每日掃描狀態維護及報表導出等功能。各中介網站之具體搜索 URL 與網頁元素選擇器均集中於 `hk_rental_tracker/adapters/` 目錄，以便於網站改版時進行集中調整。

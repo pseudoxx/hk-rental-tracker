@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-HK">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>香港租盤追蹤器 HK Rental Tracker</title>
+    <meta
+      name="description"
+      content="香港租盤追蹤器是一個本地運行的香港租務市場分析工具及 Codex Skill，可追蹤美聯、中原、香港置業及利嘉閣租盤資訊，生成每日市場摘要與本地數據報告。"
+    >
+    <link rel="canonical" href="https://pseudoxx.github.io/hk-rental-tracker/">
+    <meta property="og:title" content="香港租盤追蹤器 HK Rental Tracker">
+    <meta
+      property="og:description"
+      content="本地運行的香港租務市場分析工具，按區域或屋苑追蹤租盤、租金、呎租、來源狀態及每日市場變化。"
+    >
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://pseudoxx.github.io/hk-rental-tracker/">
+    <meta name="twitter:card" content="summary">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareSourceCode",
+        "name": "香港租盤追蹤器 HK Rental Tracker",
+        "description": "A local Hong Kong rental market tracker and Codex Skill for monitoring rental listings, rent changes, source status, and daily market reports.",
+        "codeRepository": "https://github.com/pseudoxx/hk-rental-tracker",
+        "programmingLanguage": "Python",
+        "license": "https://github.com/pseudoxx/hk-rental-tracker/blob/main/LICENSE",
+        "url": "https://pseudoxx.github.io/hk-rental-tracker/"
+      }
+    </script>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #1f2933;
+        --muted: #5f6b7a;
+        --line: #d8dee8;
+        --paper: #f8fafc;
+        --accent: #0f766e;
+        --accent-dark: #115e59;
+        --warn: #8a5a00;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #ffffff;
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "Noto Sans SC", sans-serif;
+        line-height: 1.65;
+      }
+
+      main {
+        width: min(920px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 56px 0;
+      }
+
+      header {
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 28px;
+      }
+
+      h1 {
+        margin: 0 0 14px;
+        font-size: clamp(2rem, 5vw, 3.6rem);
+        line-height: 1.08;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        margin: 34px 0 12px;
+        font-size: 1.35rem;
+        letter-spacing: 0;
+      }
+
+      p {
+        margin: 0 0 16px;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 1.2rem;
+      }
+
+      li + li {
+        margin-top: 8px;
+      }
+
+      a {
+        color: var(--accent-dark);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+
+      .lead {
+        color: var(--muted);
+        font-size: 1.08rem;
+        max-width: 760px;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .button {
+        align-items: center;
+        border: 1px solid var(--accent);
+        border-radius: 6px;
+        display: inline-flex;
+        font-weight: 650;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 16px;
+        text-decoration: none;
+      }
+
+      .button.primary {
+        background: var(--accent);
+        color: #ffffff;
+      }
+
+      .panel {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-top: 28px;
+        padding: 18px;
+      }
+
+      .notice {
+        color: var(--warn);
+        font-size: 0.96rem;
+      }
+
+      code {
+        background: #eef2f7;
+        border-radius: 4px;
+        padding: 2px 5px;
+      }
+
+      @media (max-width: 620px) {
+        main {
+          padding: 36px 0;
+        }
+
+        .actions {
+          display: grid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>香港租盤追蹤器<br>HK Rental Tracker</h1>
+        <p class="lead">
+          一個本地運行的香港租務市場分析工具及 Codex Skill，用於按區域或屋苑追蹤租盤、租金、實用面積、呎租、來源狀態及每日市場變化。
+        </p>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/pseudoxx/hk-rental-tracker">查看 GitHub 倉庫</a>
+          <a class="button" href="https://github.com/pseudoxx/hk-rental-tracker#%E5%AE%89%E8%A3%9D%E6%8C%87%E5%8D%97">安裝指南</a>
+          <a class="button" href="https://buymeacoffee.com/pseudoxx">Buy Me a Coffee</a>
+        </div>
+      </header>
+
+      <section>
+        <h2>這是什麼</h2>
+        <p>
+          香港租盤追蹤器面向需要觀察香港租務市場的人，支援本地任務配置、SQLite 數據庫、來源適配器、去重、每日掃描、摘要生成及日終報告導出。
+        </p>
+        <p>
+          目前預設來源包括美聯物業、中原地產、香港置業及利嘉閣。工具會記錄租盤首次出現時間、來源下架信號、租金變化、實用面積、呎租、樓層室號與跨平台狀態。
+        </p>
+      </section>
+
+      <section>
+        <h2>適合搜尋的關鍵詞</h2>
+        <ul>
+          <li>香港租盤追蹤器、香港租盤市場分析、香港租盤每日報告</li>
+          <li>HK rental tracker, Hong Kong rental market tracker, rental listing monitor</li>
+          <li>Codex Skill rental tracker, Python rental data tracker</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>快速開始</h2>
+        <p>Clone 倉庫後，在本地 Python 環境中安裝：</p>
+        <p><code>python -m pip install -e .</code></p>
+        <p>
+          詳細命令、Agent Skill 使用方式、任務配置與合規聲明請見
+          <a href="https://github.com/pseudoxx/hk-rental-tracker">GitHub README</a>。
+        </p>
+      </section>
+
+      <section>
+        <h2>重要聲明</h2>
+        <p class="notice">
+          本項目為獨立、非官方、本地運行之資訊整理工具，不是地產中介或代理服務，不提供帶看、撮合、推介、議價、訂約或任何收佣服務。使用者須自行核驗租盤資訊，並遵守相關網站服務條款、授權範圍及訪問限制。
+        </p>
+      </section>
+    </main>
+  </body>
+</html>
