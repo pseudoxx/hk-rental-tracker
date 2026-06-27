@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 from sqlite3 import Row
+from typing import Any
 
 from .normalization import compact_money, now_iso
 from .site_catalog import display_name
@@ -146,8 +148,8 @@ def write_summary(path: Path, store: RentalStore) -> None:
     if not active:
         lines.append("暂无活跃租盘。")
     else:
-        lines.append("| 租金 | 尺租 | 屋苑 | 座/层/室 | 户型 | 面积 | 曾降价 | 来源记录数 |")
-        lines.append("| ---: | ---: | --- | --- | --- | ---: | --- | ---: |")
+        lines.append("| 租金 | 尺租 | 屋苑 | 座/层/室 | 户型 | 面积 | 曾降价 | 来源链接 | 来源记录数 |")
+        lines.append("| ---: | ---: | --- | --- | --- | ---: | --- | --- | ---: |")
         for row in active[:20]:
             unit = " ".join(str(row[x] or "") for x in ["block", "floor", "flat"]).strip() or "-"
             psf = f"${row['last_price_per_sqft']:.1f}" if row["last_price_per_sqft"] else "-"
@@ -162,6 +164,7 @@ def write_summary(path: Path, store: RentalStore) -> None:
                         row["layout"] or "-",
                         str(row["usable_area_sqft"] or "-"),
                         "是" if row["ever_rent_decreased"] else "否",
+                        _source_links(row),
                         str(row["sources_count"] or 0),
                     ]
                 )
@@ -177,8 +180,8 @@ def write_summary(path: Path, store: RentalStore) -> None:
     if not recently_delisted:
         lines.append("暂无来源消失记录。")
     else:
-        lines.append("| 时间 | 来源 | 屋苑 | 座/层/室 | 租金 | 面积 |")
-        lines.append("| --- | --- | --- | --- | ---: | ---: |")
+        lines.append("| 时间 | 来源 | 屋苑 | 座/层/室 | 租金 | 面积 | 来源链接 |")
+        lines.append("| --- | --- | --- | --- | ---: | ---: | --- |")
         for row in recently_delisted:
             unit = " ".join(str(row[x] or "") for x in ["block", "floor", "flat"]).strip() or "-"
             lines.append(
@@ -191,6 +194,7 @@ def write_summary(path: Path, store: RentalStore) -> None:
                         unit,
                         compact_money(row["last_rent_hkd"]),
                         str(row["usable_area_sqft"] or "-"),
+                        _markdown_link(display_name(row["source_site"]), row["source_url"]),
                     ]
                 )
                 + " |"
@@ -207,3 +211,33 @@ def write_summary(path: Path, store: RentalStore) -> None:
         ]
     )
     path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _source_links(row: Row) -> str:
+    try:
+        sources = json.loads(row["source_summary_json"] or "{}")
+    except (IndexError, KeyError, TypeError, json.JSONDecodeError):
+        return "-"
+    if not isinstance(sources, dict):
+        return "-"
+
+    links: list[str] = []
+    for source_site, details in sorted(sources.items()):
+        if not isinstance(details, dict) or not details.get("active"):
+            continue
+        link = _markdown_link(display_name(source_site), details.get("url"))
+        if link != "-":
+            links.append(link)
+    return ", ".join(links) if links else "-"
+
+
+def _markdown_link(label: str, url: Any) -> str:
+    if not url:
+        return "-"
+    safe_url = str(url).replace("(", "%28").replace(")", "%29")
+    return f"[{_md(label)}]({safe_url})"
+
+
+def _md(value: Any) -> str:
+    text = "" if value is None else str(value)
+    return text.replace("|", "\\|").replace("\n", " ").strip() or "-"
